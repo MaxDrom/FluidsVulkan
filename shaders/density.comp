@@ -1,0 +1,92 @@
+#version 430
+//#extension GL_EXT_debug_printf : enable
+layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
+
+struct Boid
+{
+    vec2 pos;
+    vec2 vel;
+    vec4 col;
+};
+
+layout(std430, binding = 0) readonly buffer boidsBufferIn
+{
+    Boid boids_in[];
+};
+
+layout(std430, binding = 1) writeonly buffer densityBuffer
+{
+    float densities[];
+};
+
+layout(binding=2, r32ui) readonly uniform uimage2D prefixSum;
+
+layout(push_constant) uniform PushConstants {
+    uint bufferLength;
+    float perceptionRadius;
+}push;
+
+ivec2 imSize = imageSize(prefixSum);
+
+ivec2 getTexCoords(uint id)
+{
+    return ivec2(id%imSize.x, id/imSize.x);
+}
+const uint maxSteps = 1024*1024;
+const float PI = radians(180);
+
+float SmoothFunction(float radius, float dist)
+{
+    radius = radius*256;
+    dist = dist*256;
+    float volume = PI*pow(radius, 5)/10;
+    float value = max(0, radius - dist);
+    return value*value*value/volume;
+}
+void main()
+{
+    uint id = gl_GlobalInvocationID.x;
+    if (id>=push.bufferLength)
+    return;
+
+    Boid boid = boids_in[id];
+    ivec2 grid_id = ivec2(floor(boid.pos*(imSize-ivec2(1))));
+
+    int y_end = min(grid_id.y+2, imSize.y);
+    int y_start = max(grid_id.y-1, 0);
+    int x_end = min(grid_id.x+2, imSize.x);
+    int x_start = max(grid_id.x-1, 0);
+
+    float density = 0;
+
+    for (int y = y_start; y<y_end; y++)
+    {
+        int x = x_start;
+        int it_ind = x+ (y*imSize.x);
+        int start_ind = int(imageLoad(prefixSum, getTexCoords(it_ind-1)).r);
+
+        for (x = x_start; x< x_end; x++)
+        {
+
+            int end_ind = min(int(imageLoad(prefixSum, ivec2(x, y)).r), int(start_ind + maxSteps));
+            for (uint i = start_ind; i< end_ind; i++)
+            {
+                Boid neign = boids_in[i];
+                vec2 dist = boid.pos-neign.pos;
+                float d = length(dist);
+                if (d>=push.perceptionRadius)
+                    continue;
+                
+                density += SmoothFunction(push.perceptionRadius, d);
+            }
+            start_ind = end_ind;
+        }
+    }
+    densities[id] = density;
+    
+    
+}
+
+
+
+

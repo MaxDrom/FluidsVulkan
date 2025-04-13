@@ -1,0 +1,53 @@
+#version 430 
+//#extension GL_EXT_debug_printf : enable
+layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding=0, r32ui) readonly uniform uimage2D original;
+layout(binding=1, r32ui) uniform uimage2D prefixSum;
+
+layout(push_constant) uniform PushConstants
+{
+    uint offset;
+}push;
+
+shared uint shared_data[gl_WorkGroupSize.x*2];
+
+ivec2 imSize = imageSize(prefixSum);
+ivec2 getTexCoords(uint id)
+{
+    return ivec2(id % imSize.x, id/imSize.x);
+}
+
+
+void main(void) {
+    uint id = gl_GlobalInvocationID.x;
+    uint rd_id;
+    uint wr_id;
+    uint mask;
+
+    const uint maxSteps = 100;
+    const uint steps = 11;
+    uint iter = 0;
+
+    shared_data[id*2] = imageLoad(original,getTexCoords(push.offset+id*2)).r;
+    shared_data[id*2+1] = imageLoad(original,getTexCoords(push.offset+id*2+1)).r;
+
+    barrier();
+    memoryBarrierShared();
+
+    for (iter = 0; iter < steps; iter++)
+    {
+        mask = (1 << iter) - 1;
+        rd_id = ((id >> iter) << (iter+1)) + mask;
+        wr_id = rd_id + 1 + (id & mask);
+
+        shared_data[wr_id] += shared_data[rd_id];
+
+        barrier();
+        memoryBarrierShared();
+    }
+
+    uint texOfffset =imageLoad(prefixSum,getTexCoords(push.offset-1)).r;
+    imageStore(prefixSum, getTexCoords(push.offset+id*2),uvec4(shared_data[id*2]+texOfffset, 0, 0, 0));
+    imageStore(prefixSum, getTexCoords(push.offset+id*2+1),uvec4(shared_data[id*2+1]+texOfffset, 0, 0, 0));
+}

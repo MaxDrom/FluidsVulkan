@@ -1,0 +1,47 @@
+#version 430
+//#extension GL_EXT_debug_printf : enable
+layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
+
+struct Boid
+{
+    vec2 pos;
+    vec2 vel;
+    vec4 col;
+};
+
+
+layout(std430, binding = 0) readonly buffer boidsBufferIn
+{
+    Boid boids_in[];
+};
+
+layout(std430, binding = 1) writeonly buffer boidsBufferOut
+{
+    Boid boids_out[];
+};
+
+layout(binding=2, r32ui) uniform uimage2D bucketSizes;
+
+layout(binding=3, r32ui) uniform uimage2D prefixSum;
+
+layout(push_constant) uniform PushConstants {
+    uint bufferLength;
+}push;
+
+ivec2 imSize = imageSize(bucketSizes);
+
+void main()
+{
+    uint id = gl_GlobalInvocationID.x;
+    if(id>=push.bufferLength)
+    return;
+
+    Boid boid = boids_in[id];
+    //debugPrintfEXT("%f %f %f %f", boid.pos.x, boid.pos.y, (id/100)/99.0, (id%100)/99.0);
+    ivec2 grid_id = ivec2(floor(boid.pos*(imSize-ivec2(1))));
+
+    uint id_n = imageAtomicAdd(bucketSizes, grid_id , 1);
+}
+
+
+
