@@ -16,26 +16,8 @@ internal sealed class PrefixSumGPU : IDisposable
         _device = device;
         _ctx = ctx;
 
-        DescriptorSetLayoutBinding[] bindings =
-        [
-            new()
-            {
-                Binding = 0,
-                DescriptorType = DescriptorType.StorageImage,
-                DescriptorCount = 1,
-                StageFlags = ShaderStageFlags.ComputeBit,
-            },
-            new()
-            {
-                Binding = 1,
-                DescriptorType = DescriptorType.StorageImage,
-                DescriptorCount = 1,
-                StageFlags = ShaderStageFlags.ComputeBit,
-            },
-        ];
-
         _computeShader = new ComputeShader<uint>(ctx, device,
-            "shader_objects/prefixSum.comp.spv", bindings);
+            "shader_objects/prefixSum.comp.spv");
     }
 
     public void RecordBuffer(VkImageView source,

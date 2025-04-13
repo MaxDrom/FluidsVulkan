@@ -74,7 +74,8 @@ public class FluidEngineGpu : IParticleSystem
         _allocator = allocator;
         _stagingAllocator = stagingAllocator;
         _bucketSizes = new VkTexture(ImageType.Type2D,
-            new Extent3D(_gridSize, _gridSize, 1), 1, 1, Format.R32Uint,
+            new Extent3D(_gridSize, _gridSize, 1), 1, 1,
+            Format.R32Uint,
             ImageTiling.Optimal, ImageLayout.Undefined,
             ImageUsageFlags.StorageBit |
             ImageUsageFlags.TransferDstBit,
@@ -82,7 +83,8 @@ public class FluidEngineGpu : IParticleSystem
             SharingMode.Exclusive, _allocator);
 
         _prefixSum = new VkTexture(ImageType.Type2D,
-            new Extent3D(_gridSize, _gridSize, 1), 1, 1, Format.R32Uint,
+            new Extent3D(_gridSize, _gridSize, 1), 1, 1,
+            Format.R32Uint,
             ImageTiling.Optimal, ImageLayout.Undefined,
             ImageUsageFlags.StorageBit |
             ImageUsageFlags.TransferDstBit,
@@ -110,49 +112,11 @@ public class FluidEngineGpu : IParticleSystem
 
         _prefixSumGpu = new PrefixSumGPU(_ctx, _device);
 
-        DescriptorSetLayoutBinding[] bindings =
-        [
-            new()
-            {
-                Binding = 0,
-                DescriptorType = DescriptorType.StorageBuffer,
-                DescriptorCount = 1,
-                StageFlags = ShaderStageFlags.ComputeBit,
-            },
-            new()
-            {
-                Binding = 1,
-                DescriptorType = DescriptorType.StorageBuffer,
-                DescriptorCount = 1,
-                StageFlags = ShaderStageFlags.ComputeBit,
-            },
-            new()
-            {
-                Binding = 2,
-                DescriptorType = DescriptorType.StorageImage,
-                DescriptorCount = 1,
-                StageFlags = ShaderStageFlags.ComputeBit,
-            },
-
-            new()
-            {
-                Binding = 3,
-                DescriptorType = DescriptorType.StorageImage,
-                DescriptorCount = 1,
-                StageFlags = ShaderStageFlags.ComputeBit,
-            },
-        ];
-
-
         _countShader = new ComputeShader<uint>(ctx, device,
-            "shader_objects/count.comp.spv"
-            ,
-            bindings);
+            "shader_objects/count.comp.spv");
 
         _replaceShader = new ComputeShader<uint>(ctx, device,
-            "shader_objects/replace.comp.spv"
-            ,
-            bindings);
+            "shader_objects/replace.comp.spv");
 
         _oldParticles = new VkBuffer<Fluid>(initialData.Length,
             BufferUsageFlags.StorageBufferBit |
@@ -242,64 +206,24 @@ public class FluidEngineGpu : IParticleSystem
 
     private void InitUpdatePipeline()
     {
-        DescriptorSetLayoutBinding[] bindings =
-        [
-            new DescriptorSetLayoutBinding()
-            {
-                Binding = 0,
-                DescriptorType = DescriptorType.StorageBuffer,
-                DescriptorCount = 1,
-                StageFlags = ShaderStageFlags.ComputeBit
-            },
-            new DescriptorSetLayoutBinding()
-            {
-                Binding = 1,
-                DescriptorType = DescriptorType.StorageBuffer,
-                DescriptorCount = 1,
-                StageFlags = ShaderStageFlags.ComputeBit
-            },
-            new DescriptorSetLayoutBinding()
-            {
-                Binding = 2,
-                DescriptorType = DescriptorType.StorageBuffer,
-                DescriptorCount = 1,
-                StageFlags = ShaderStageFlags.ComputeBit
-            },
-            new DescriptorSetLayoutBinding()
-            {
-                Binding = 3,
-                DescriptorType = DescriptorType.StorageImage,
-                DescriptorCount = 1,
-                StageFlags = ShaderStageFlags.ComputeBit
-            }
-        ];
-
         _updateShader = new ComputeShader<UpdatePushConstant>(_ctx,
-            _device, "shader_objects/force.comp.spv", bindings);
-        
-        _updateShader.SetBufferStorage(0, _newParticles, AccessFlags.ShaderReadBit);
-        _updateShader.SetBufferStorage(1, _densityBuffer, AccessFlags.ShaderReadBit);
-        _updateShader.SetBufferStorage(2, _oldParticles, AccessFlags.ShaderWriteBit);
-        _updateShader.SetImageStorage(3, _prefixSumView, AccessFlags.ShaderReadBit);
+            _device, "shader_objects/force.comp.spv");
+
+        _updateShader.SetBufferStorage(0, _newParticles,
+            AccessFlags.ShaderReadBit);
+        _updateShader.SetBufferStorage(1, _densityBuffer,
+            AccessFlags.ShaderReadBit);
+        _updateShader.SetBufferStorage(2, _oldParticles,
+            AccessFlags.ShaderWriteBit);
+        _updateShader.SetImageStorage(3, _prefixSumView,
+            AccessFlags.ShaderReadBit);
     }
 
     private void InitPredictPipeline()
     {
-        DescriptorSetLayoutBinding[] bindings =
-        [
-            new DescriptorSetLayoutBinding()
-            {
-                Binding = 0,
-                DescriptorType = DescriptorType.StorageBuffer,
-                DescriptorCount = 1,
-                StageFlags = ShaderStageFlags.ComputeBit
-            }
-        ];
-
         _predictShader = new ComputeShader<PredictPushConstant>(_ctx,
             _device,
-            "shader_objects/predict.comp.spv",
-            bindings);
+            "shader_objects/predict.comp.spv");
 
         _predictShader.SetBufferStorage(0, _oldParticles,
             AccessFlags.ShaderReadBit | AccessFlags.ShaderWriteBit);
@@ -310,35 +234,10 @@ public class FluidEngineGpu : IParticleSystem
         _densityBuffer = new VkBuffer<float>((int)_boidsCount,
             BufferUsageFlags.StorageBufferBit,
             SharingMode.Exclusive, _allocator);
-        DescriptorSetLayoutBinding[] bindings =
-        [
-            new()
-            {
-                Binding = 0,
-                DescriptorType = DescriptorType.StorageBuffer,
-                DescriptorCount = 1,
-                StageFlags = ShaderStageFlags.ComputeBit,
-            },
-            new()
-            {
-                Binding = 1,
-                DescriptorType = DescriptorType.StorageBuffer,
-                DescriptorCount = 1,
-                StageFlags = ShaderStageFlags.ComputeBit,
-            },
-            new()
-            {
-                Binding = 2,
-                DescriptorType = DescriptorType.StorageImage,
-                DescriptorCount = 1,
-                StageFlags = ShaderStageFlags.ComputeBit,
-            },
-        ];
 
         _densityShader = new ComputeShader<DensityPushConstant>(_ctx,
             _device,
-            "shader_objects/density.comp.spv",
-            bindings);
+            "shader_objects/density.comp.spv");
 
         _densityShader.SetBufferStorage(0, _newParticles,
             AccessFlags.ShaderReadBit);
@@ -372,19 +271,20 @@ public class FluidEngineGpu : IParticleSystem
 
             _countShader.RecordDispatch(recording,
                 (uint)Math.Ceiling(_boidsCount / 1024.0), 1, 1);
-            
-            
+
+
             _prefixSumGpu.RecordBuffer(_bucketSizesView,
-                _prefixSumView, ((int)_gridSize, (int)_gridSize), recording);
-            
-            
+                _prefixSumView, ((int)_gridSize, (int)_gridSize),
+                recording);
+
+
             _replaceShader.RecordDispatch(recording,
                 (uint)Math.Ceiling(_boidsCount / 1024.0),
                 1, 1);
-            
+
             _densityShader.RecordDispatch(recording,
                 (uint)Math.Ceiling(_boidsCount / 1024.0), 1, 1);
-            
+
             _updateShader.SetPushConstant(new UpdatePushConstant()
             {
                 bufferLength = _boidsCount,

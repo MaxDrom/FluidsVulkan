@@ -3,15 +3,17 @@ using Silk.NET.Vulkan;
 
 namespace FluidsVulkan;
 
-public class ComputeShader<T> : IDisposable
+public class ComputeShader<T>(VkContext ctx,
+    VkDevice device,
+    string spvPath
+)
+    : IDisposable
     where T : unmanaged
 {
-    private VkContext _ctx;
-    private VkDevice _device;
     private VkDescriptorPool _descriptorPool;
     private VkSetLayout _layout;
     private DescriptorSet _descriptorSet;
-    private VkComputePipeline _computePipeline;
+    private VkComputePipeline _computePipeline = null;
     private T _pushConstant;
 
     private Dictionary<int, (IVkBuffer, AccessFlags)>
@@ -22,27 +24,44 @@ public class ComputeShader<T> : IDisposable
         _imageBindings =
             [];
 
-    public ComputeShader(VkContext ctx,
-        VkDevice device,
-        string spvPath,
-        DescriptorSetLayoutBinding[] bindings)
+    private void InitPipeline()
     {
-        _ctx = ctx;
-        _device = device;
         using var shaderModule =
-            new VkShaderModule(_ctx, _device, spvPath);
-        _layout = new VkSetLayout(_ctx, _device, bindings);
-        _computePipeline = new VkComputePipeline(_ctx, _device,
+            new VkShaderModule(ctx, device, spvPath);
+        var bindings = new List<DescriptorSetLayoutBinding>();
+        var bufferCount = _bufferBindings.Count;
+        var imagesCount = _imageBindings.Count;
+        foreach (var (binding, _) in _bufferBindings)
+        {
+            bindings.Add(
+                new DescriptorSetLayoutBinding()
+                {
+                    Binding = (uint)binding,
+                    DescriptorCount = 1,
+                    DescriptorType = DescriptorType.StorageBuffer,
+                    StageFlags = ShaderStageFlags.ComputeBit
+                });
+        }
+        
+        foreach (var (binding, _) in _imageBindings)
+        {
+            bindings.Add(
+                new DescriptorSetLayoutBinding()
+                {
+                    Binding = (uint)binding,
+                    DescriptorCount = 1,
+                    DescriptorType = DescriptorType.StorageImage,
+                    StageFlags = ShaderStageFlags.ComputeBit
+                });
+        }
+        
+        _layout = new VkSetLayout(ctx, device, [..bindings]);
+        _computePipeline = new VkComputePipeline(ctx, device,
             new VkShaderInfo(shaderModule, "main"), [_layout], [
                 new PushConstantRange(ShaderStageFlags.ComputeBit, 0,
                     (uint)Marshal.SizeOf<T>())
             ]);
-        var bufferCount = (uint)bindings
-            .Count(z => z.DescriptorType ==
-                        DescriptorType.StorageBuffer);
-        var imagesCount = (uint)bindings
-            .Count(z => z.DescriptorType ==
-                        DescriptorType.StorageImage);
+        
         var descriprotSizes = new List<DescriptorPoolSize>();
 
         if (bufferCount > 0)
@@ -50,7 +69,7 @@ public class ComputeShader<T> : IDisposable
                 new DescriptorPoolSize()
                 {
                     Type = DescriptorType.StorageBuffer,
-                    DescriptorCount = bufferCount,
+                    DescriptorCount = (uint)bufferCount,
                 });
 
         if (imagesCount > 0)
@@ -58,22 +77,55 @@ public class ComputeShader<T> : IDisposable
                 new DescriptorPoolSize()
                 {
                     Type = DescriptorType.StorageImage,
-                    DescriptorCount = imagesCount,
+                    DescriptorCount = (uint)imagesCount,
                 });
 
 
-        _descriptorPool = new VkDescriptorPool(_ctx, _device, [
+        _descriptorPool = new VkDescriptorPool(ctx, device, [
             .. descriprotSizes
         ], 1);
         _descriptorSet =
             _descriptorPool.AllocateDescriptors(_layout, 1)[0];
+        var updater = new VkDescriptorSetUpdater(ctx, device);
+        foreach (var (binding, (buffer, _)) in _bufferBindings)
+        {
+            updater = updater
+                .AppendWrite(_descriptorSet, binding,
+                    DescriptorType.StorageBuffer,
+                    [
+                        new DescriptorBufferInfo()
+                        {
+                            Buffer = buffer.Buffer,
+                            Offset = 0,
+                            Range = buffer.Size
+                        },
+                    ]
+                );
+        }
+        foreach (var (binding, (image, _)) in _imageBindings)
+        {
+            updater = updater
+                .AppendWrite(_descriptorSet, binding,
+                    DescriptorType.StorageImage,
+                    [
+                        new DescriptorImageInfo()
+                        {
+                            ImageLayout = ImageLayout.General,
+                            ImageView = image.ImageView
+                        },
+                    ]
+                );
+        }
+        updater.Update();
     }
-
+    
     public void RecordDispatch(VkCommandRecordingScope recording,
         uint threadGroupCountX,
         uint threadGroupCountY,
         uint threadGroupCountZ)
     {
+        if(_computePipeline == null)
+            InitPipeline();
         var bufferBarriers = new List<BufferMemoryBarrier>();
         foreach (var (binding, (buffer, dstAccesFlags)) in
                  _bufferBindings)
@@ -171,7 +223,9 @@ public class ComputeShader<T> : IDisposable
         where TBuf : unmanaged
     {
         _bufferBindings[binding] = (buffer, accessFlags);
-        new VkDescriptorSetUpdater(_ctx, _device)
+        if(_computePipeline == null)
+            return;
+        new VkDescriptorSetUpdater(ctx, device)
             .AppendWrite(_descriptorSet, binding,
                 DescriptorType.StorageBuffer,
                 [
@@ -190,7 +244,9 @@ public class ComputeShader<T> : IDisposable
         AccessFlags accessFlags)
     {
         _imageBindings[binding] = (view, accessFlags);
-        new VkDescriptorSetUpdater(_ctx, _device)
+        if(_computePipeline == null)
+            return;
+        new VkDescriptorSetUpdater(ctx, device)
             .AppendWrite(_descriptorSet, binding,
                 DescriptorType.StorageImage,
                 [
