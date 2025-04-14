@@ -3,22 +3,13 @@ using Silk.NET.Vulkan;
 
 namespace FluidsVulkan.FluidGPU;
 
-internal sealed class PrefixSumGPU : IDisposable
+internal sealed class PrefixSumGPU(VkContext ctx,
+    VkDevice device
+)
+    : IDisposable
 {
-    private VkDevice _device;
-    private VkContext _ctx;
-
-    private readonly ComputeShader<uint> _computeShader;
-
-    public PrefixSumGPU(VkContext ctx,
-        VkDevice device)
-    {
-        _device = device;
-        _ctx = ctx;
-
-        _computeShader = new ComputeShader<uint>(ctx, device,
-            "shader_objects/prefixSum.comp.spv");
-    }
+    private readonly ComputeShader<uint> _computeShader = new(ctx, device,
+        "shader_objects/prefixSum.comp.spv");
 
     public void RecordBuffer(VkImageView source,
         VkImageView destination,

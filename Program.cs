@@ -42,16 +42,16 @@ internal class Program
             var phi = random.NextDouble() * Math.PI * 2;
             var r = random.NextDouble()*0.3+0.1;
             var force = 0.001/ (r * r );
-            var speed = Math.Sqrt(force * r);
-            var position = new Vector2D<float>((float)random.NextDouble()*0.5f+0.5f,
-                (float)random.NextDouble()*0.9f);
+            var speed = 0.1;//Math.Sqrt(force * r);
+            var position = new Vector2D<float>((float)Math.Cos(phi),
+                (float)Math.Sin(phi))*(float)r+new Vector2D<float>(0.5f, 0.5f);
             var velocity = new Vector2D<float>((float)Math.Sin(phi),
                 -(float)Math.Cos(phi))*(float)speed;
 
             instances[i] = new Fluid()
             {
                 position = position,
-                velocity = new Vector2D<float>(0, 0),
+                velocity = velocity,
             };
         }
 

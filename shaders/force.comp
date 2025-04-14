@@ -84,13 +84,23 @@ float SmoothFunctionSlope(float radius, float dist)
     float value = max(0, radius - dist);
     return -3*value*value/volume;
 }
-const float targetDensity = 9;
-const float densityMult = 70;
+const float targetDensity = 10;
+const float densityMult = 15;
 float Pressure(float density)
 {
 
     float error = (density - targetDensity);
     return error*densityMult;
+}
+const vec2 blackHolePos = vec2(0.5, 0.5);
+vec2 forceToBlackHole(vec2 pos)
+{
+    vec2 toBlackHole = blackHolePos - pos;
+    float d = length(toBlackHole);
+    float r = max(length(toBlackHole), 0.01);
+    if(d < 0.00001)
+        return vec2(0);
+    return 0.001*normalize(toBlackHole)/(r*r);
 }
 
 void main()
@@ -150,10 +160,11 @@ void main()
             start_ind = end_ind;
         }
     }
-    force += 250*averageVel*length(averageVel) - 2*boid.vel*length(boid.vel);
-    boid.vel += force/densities[id]*push.delta-vec2(0, -0.2)*push.delta;
-    boid.col = vec4(temperatureGradient(max(Pressure(densities[id]), 0)/densityMult/5), 1);
-
+    //averageVel += boid.vel;
+    force += 300*averageVel*length(averageVel);// - 2*boid.vel*length(boid.vel);
+    boid.vel += force/densities[id]*push.delta+forceToBlackHole(boid.pos)*push.delta;
+    //boid.col = vec4(temperatureGradient(max(Pressure(densities[id]), 0)/densityMult/5), 1);
+    boid.col = vec4(temperatureGradient(7*length(boid.vel)), 1);
     boids_out[id] = boid;
 }
 

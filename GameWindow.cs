@@ -465,7 +465,7 @@ public sealed class GameWindow : IDisposable
         CreateViews();
     }
 
-    static double _fixedUpdateInterval = 1/120.0;
+    static double _fixedUpdateInterval = 1/60.0;
     static double _timeFromFixedUpdate = _fixedUpdateInterval;
     private async Task OnUpdate(double frameTime)
     {
@@ -485,9 +485,10 @@ public sealed class GameWindow : IDisposable
             _totalFrameTime = 0;
             _fps = 0;
         }
-
+        
+        
         _timeFromFixedUpdate += frameTime;
-        while (_timeFromFixedUpdate >= _fixedUpdateInterval)
+        for (int step = 0; step<2 && _timeFromFixedUpdate >= _fixedUpdateInterval; step++)
         {
             await _particleSystem.Update(_fixedUpdateInterval, _totalTime);
             _timeFromFixedUpdate -= _fixedUpdateInterval;

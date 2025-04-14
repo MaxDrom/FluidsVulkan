@@ -20,6 +20,25 @@ layout(push_constant) uniform PushConstants {
     float delta;
 }push;
 
+
+//const vec2 blackHolePos = vec2(0.5, 0.5);
+//const float minr = 0.01;
+//
+//void handleCollisionWithBH(Boid boid)
+//{
+//    vec2 toBlackHole = blackHolePos - boid.pos;
+//    float r = length(toBlackHole);
+//    if( r< 0.0000001)
+//        return;
+//    vec2 dir = toBlackHole/r;
+//    if(r<minr)
+//    {
+//        boid.pos = minr*dir;
+//        boid.vel = boid.vel - 2*dot(boid.vel, dir)*dir;
+//    }
+//    
+//}
+
 void main()
 {
     uint id = gl_GlobalInvocationID.x;
@@ -50,6 +69,8 @@ void main()
         boid.pos.y = 1;
         boid.vel.y = -0.95*abs(boid.vel.y);
     }
+
+   // handleCollisionWithBH(boid);
     boid.col = vec4(1);
     boids_in[id] = boid;
 }

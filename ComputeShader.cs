@@ -205,7 +205,7 @@ public class ComputeShader<T>(VkContext ctx,
 
         recording.BindPipeline(_computePipeline);
         recording.BindDescriptorSets(PipelineBindPoint.Compute,
-            _computePipeline.PipelineLayout, [_descriptorSet]);
+            _computePipeline!.PipelineLayout, [_descriptorSet]);
         recording.SetPushConstant(_computePipeline,
             ShaderStageFlags.ComputeBit, ref _pushConstant);
         recording.Dispatch(threadGroupCountX, threadGroupCountY,
