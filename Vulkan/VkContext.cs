@@ -46,7 +46,7 @@ public class VkContext : IDisposable
         var appInfo = new ApplicationInfo
         {
             SType = StructureType.ApplicationInfo,
-            ApiVersion = Vk.Version13,
+            ApiVersion = Vk.Version11,
         };
 #if DEBUG
         var debugInfo = new DebugUtilsMessengerCreateInfoEXT

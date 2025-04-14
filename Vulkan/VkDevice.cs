@@ -84,13 +84,15 @@ public unsafe class VkDevice : IDisposable
             Console.ResetColor();
         }
 
+        var defaultPropery = 1.0f;
         var queueCreateInfos = new DeviceQueueCreateInfo
         {
             SType = StructureType.DeviceQueueCreateInfo,
             QueueCount = queueCount,
             QueueFamilyIndex = _graphicsFamilyIndex.Value,
-            PQueuePriorities = defaultProperites,
+            PQueuePriorities = &defaultPropery,
         };
+        
 
 
         DeviceCreateInfo deviceCreateInfo = new DeviceCreateInfo
