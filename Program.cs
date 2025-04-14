@@ -39,10 +39,10 @@ internal class Program
         var random = new Random();
         for (var i = 0; i < numberOfParticles; i++)
         {
-            var phi = random.NextDouble() * Math.PI * 2;
-            var r = random.NextDouble()*0.3+0.1;
-            var force = 0.001/ (r * r );
-            var speed = 0.1;//Math.Sqrt(force * r);
+            var phi = random.NextDouble() * Math.PI ;
+            var r = random.NextDouble()*0.4+0.1;
+            var force = 0.005/ (r * r );
+            var speed =0.8*Math.Sqrt(force * r);
             var position = new Vector2D<float>((float)Math.Cos(phi),
                 (float)Math.Sin(phi))*(float)r+new Vector2D<float>(0.5f, 0.5f);
             var velocity = new Vector2D<float>((float)Math.Sin(phi),

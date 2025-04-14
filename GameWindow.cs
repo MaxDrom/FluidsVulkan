@@ -490,7 +490,7 @@ public sealed class GameWindow : IDisposable
         _timeFromFixedUpdate += frameTime;
         for (int step = 0; step<2 && _timeFromFixedUpdate >= _fixedUpdateInterval; step++)
         {
-            await _particleSystem.Update(_fixedUpdateInterval, _totalTime);
+            await _particleSystem.Update(_fixedUpdateInterval/5, _totalTime);
             _timeFromFixedUpdate -= _fixedUpdateInterval;
         }
         
