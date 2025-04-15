@@ -11,6 +11,8 @@ using Silk.NET.Windowing;
 
 namespace FluidsVulkan.ImGui;
 
+using ImGui = ImGuiNET.ImGui;
+
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct ImGuiVertex : IVertexData<ImGuiVertex>
 {
@@ -50,7 +52,8 @@ public class ImGuiController : IDisposable
     private readonly VkBuffer<ushort> _indexBuffer;
     private readonly VkMappedMemory<ushort> _indexBufferMapped;
     private readonly VkGraphicsPipeline _pipeline;
-    private IntPtr _ImGuiCtx = ImGuiNET.ImGui.CreateContext();
+    private Dictionary<IEditorComponent, bool> _tabs;
+    private IntPtr _ImGuiCtx = ImGui.CreateContext();
     private IWindow _window;
     private IEditorComponent[] _components;
     private GameWindow _gameWindow;
@@ -67,41 +70,48 @@ public class ImGuiController : IDisposable
         IEditorComponent[] components)
     {
         IInputContext inputContext = eventHandler.InputContext;
-        ImGuiNET.ImGui.StyleColorsClassic();
+        ImGui.StyleColorsClassic();
         _components = components;
+        _tabs = new Dictionary<IEditorComponent, bool>();
+        foreach (var component in components)
+        {
+            _tabs[component] = false;
+        }
+
         _ctx = ctx;
         _device = device;
         _window = window;
         _gameWindow = gameWindow;
         var renderTarget = gameWindow.RenderTarget;
         var extent = gameWindow.WindowSize;
-        var io = ImGuiNET.ImGui.GetIO();
+        var io = ImGui.GetIO();
         io.DisplaySize = new Vector2(_gameWindow.WindowSize.Width,
             _gameWindow.WindowSize.Height);
         io.ConfigFlags |= ImGuiConfigFlags.NavEnableKeyboard;
+        io.ConfigFlags |= ImGuiConfigFlags.DockingEnable;
         io.BackendFlags |= ImGuiBackendFlags.HasSetMousePos;
         io.FontGlobalScale =
-            _window.FramebufferSize.X /(float) _window.Size.X;
+            _window.FramebufferSize.X / (float)_window.Size.X;
         inputContext.Mice[0].MouseMove += (m, x) =>
         {
             var newX = x.X / _window.Size.X *
                        _gameWindow.WindowSize.Width;
             var newY = x.Y / _window.Size.Y *
                        _gameWindow.WindowSize.Height;
-            ImGuiNET.ImGui.GetIO()
+            ImGui.GetIO()
                 .AddMousePosEvent(newX, newY);
         };
 
         inputContext.Mice[0].MouseDown += (m, x) =>
         {
-            ImGuiNET.ImGui.GetIO()
+            ImGui.GetIO()
                 .AddMouseButtonEvent((int)x,
                     true);
         };
 
         inputContext.Mice[0].MouseUp += (m, x) =>
         {
-            ImGuiNET.ImGui.GetIO()
+            ImGui.GetIO()
                 .AddMouseButtonEvent((int)x,
                     false);
         };
@@ -242,7 +252,7 @@ public class ImGuiController : IDisposable
                 DescriptorType.CombinedImageSampler,
                 [imageInfo]).Update();
 
-        ImGuiNET.ImGui.GetIO().Fonts
+        ImGui.GetIO().Fonts
             .SetTexID((IntPtr)_descriprotSet.Handle);
 
         _pipeline = new GraphicsPipelineBuilder()
@@ -279,32 +289,50 @@ public class ImGuiController : IDisposable
         _indexBufferMapped = _indexBuffer.Map(0, 128 * 1024);
     }
 
+    bool _fistRun = true;
+
     public void Update(double a, double b)
     {
-        ImGuiNET.ImGui.GetIO().DeltaTime = (float)a;
-        var io = ImGuiNET.ImGui.GetIO();
+        ImGui.GetIO().DeltaTime = (float)a;
+        var io = ImGui.GetIO();
         io.DisplaySize = new Vector2(_gameWindow.WindowSize.Width,
             _gameWindow.WindowSize.Height);
-        ImGuiNET.ImGui.NewFrame();
-        ImGuiNET.ImGui.Begin("Editor");
 
+        io.ConfigFlags |= ImGuiConfigFlags.DockingEnable;
+
+
+        ImGui.NewFrame();
+
+
+        //ImGui.SetNextWindowDockID();
+        float startPos = 0;
         foreach (var component in _components)
         {
-            ImGuiNET.ImGui.BeginChild(
-                $"{component.Name}###{component.Guid}");
+            ImGui.SetNextWindowCollapsed(true, ImGuiCond.Once);
+            ImGui.SetNextWindowSize(
+                io.DisplaySize with
+                {
+                    X = io.DisplaySize.X /
+                        Math.Max(3, _components.Length)
+                }, ImGuiCond.Once);
+            ImGui.SetNextWindowPos(new Vector2(startPos, 0));
+            ImGui.Begin(
+                $"{component.Name}###{component.Guid}",
+                ImGuiWindowFlags.NoMove);
             component.UpdateGui();
-            ImGuiNET.ImGui.EndChild();
+            startPos += ImGui.GetWindowSize().X;
+            ImGui.End();
         }
 
-        ImGuiNET.ImGui.End();
-        ImGuiNET.ImGui.EndFrame();
+
+        ImGui.EndFrame();
     }
 
     public void RecordImGuiRender(VkCommandRecordingScope recording,
         Rect2D renderArea)
     {
-        ImGuiNET.ImGui.Render();
-        var drawData = ImGuiNET.ImGui.GetDrawData();
+        ImGui.Render();
+        var drawData = ImGui.GetDrawData();
         int fbWidth = (int)(drawData.DisplaySize.X *
                             drawData.FramebufferScale.X);
         int fbHeight = (int)(drawData.DisplaySize.Y *
@@ -429,7 +457,7 @@ public class ImGuiController : IDisposable
 
     private unsafe void UploadFonts()
     {
-        ImGuiNET.ImGui.GetIO().Fonts
+        ImGui.GetIO().Fonts
             .GetTexDataAsRGBA32(out byte* pFonts, out var width,
                 out var height);
         ulong uploadSize = (ulong)(width * height * 4);

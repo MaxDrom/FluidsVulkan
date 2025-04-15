@@ -16,6 +16,7 @@ public struct PushConstant
     public Vector2D<float> xrange;
     public Vector2D<float> yrange;
     public Vector2D<float> minMax;
+    public int visualizationIndex;
 }
 
 public sealed class FluidView : IDisposable, IParametrized
@@ -113,7 +114,7 @@ public sealed class FluidView : IDisposable, IParametrized
     private Vector2D<float> _boxCenter = new(0.0f, 0.0f);
     private readonly Extent2D _extent;
     private readonly IParticleSystem _fluidEngine;
-    private Vector2 _tempMinMax = new Vector2(5, 30);
+    private Vector2 _tempMinMax = new(5, 30);
 
     [SliderFloat2("Colormap min max", -1000,
         1000, "%.1f", ImGuiSliderFlags.Logarithmic)]
@@ -123,13 +124,17 @@ public sealed class FluidView : IDisposable, IParametrized
         set
         {
             _tempMinMax = value;
-            if(_tempMinMax.X>_tempMinMax.Y)
+            if (_tempMinMax.X > _tempMinMax.Y)
                 _tempMinMax.X = _tempMinMax.Y;
-            if(_tempMinMax.Y < _tempMinMax.X)
-                _tempMinMax.Y = _tempMinMax.X;
         }
     }
 
+    [SliderFloat("Simulation Speed", 0f, 5.0f, "%.1f")]
+    public float SimulationSpeed { get; set; } = 1f;
+    
+    
+    [Combo("Color map visualization target", ["Density", "Pressure", "Velocity"])]
+    public int VisualisationIndex { get; set; }
     public FluidView(VkContext ctx,
         VkDevice device,
         [MetadataFilter("Type", "DeviceLocal")]
@@ -237,7 +242,8 @@ public sealed class FluidView : IDisposable, IParametrized
                 new Vector2D<float>(BoxCenter.X, BoxCenter.X + Scale),
             yrange =
                 new Vector2D<float>(BoxCenter.Y, BoxCenter.Y + Scale),
-            minMax = new Vector2D<float>(_tempMinMax.X, _tempMinMax.Y)
+            minMax = new Vector2D<float>(_tempMinMax.X, _tempMinMax.Y),
+            visualizationIndex = VisualisationIndex,
         };
         recording.SetPushConstant(_graphicsPipeline,
             ShaderStageFlags.VertexBit, ref pushConstant);
@@ -254,7 +260,7 @@ public sealed class FluidView : IDisposable, IParametrized
 
     public async Task Update(double frameTime, double totalTime)
     {
-        await _fluidEngine.Update(1 / 240.0, totalTime);
+        await _fluidEngine.Update(1/300.0*SimulationSpeed, totalTime);
         _instanceBuffer ??= new VkBuffer<Fluid>(
             _fluidEngine.Buffer.Size,
             BufferUsageFlags.VertexBufferBit |

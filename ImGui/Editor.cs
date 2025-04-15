@@ -53,7 +53,7 @@ public class Editor : IEditorComponent
         float y = 0;
         foreach (var (obj, properties) in _properties)
         {
-            ImGui.BeginChild($"###{obj}", new(vx.X,dy));
+            ImGui.BeginChild($"###{obj}", new(vx.X,dy),ImGuiChildFlags.Borders|ImGuiChildFlags.FrameStyle);
             var name = obj.GetType().Name;
             var wrapL = "###    ";
             var wrapR = "    ###";
@@ -68,8 +68,9 @@ public class Editor : IEditorComponent
                 _refs[property] = (
                     attr.ApplyAttribute(property.GetValue(obj)),
                     attr);
+                ImGui.Separator();
             }
-            ImGui.Separator();
+            
             ImGui.EndChild();
         }
         

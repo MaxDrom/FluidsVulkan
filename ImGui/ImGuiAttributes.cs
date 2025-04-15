@@ -27,6 +27,9 @@ public class RefLikeProperty<T>(T value) : IRefLikeProperty
         return false;
     }
 }
+
+
+
 public abstract class ImGuiAttribute : Attribute
 {
     public abstract IRefLikeProperty ApplyAttribute(object value);
@@ -81,12 +84,11 @@ public class ComboAttribute : ImGuiAttribute
 
     public ComboAttribute(string label,
         string[] items,
-        int items_count,
-        int popup_max_height_in_items)
+        int popup_max_height_in_items = 3)
     {
         _label = label;
         _items = items;
-        _items_count = items_count;
+        _items_count = items.Length;
         _popup_max_height_in_items = popup_max_height_in_items;
     }
 

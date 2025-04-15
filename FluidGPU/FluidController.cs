@@ -6,15 +6,12 @@ namespace FluidsVulkan.FluidGPU;
 public class FluidController
 {
     private FluidView _view;
-    private IParticleSystem _model;
     private float _speed = 0.001f;
 
     public FluidController(EventHandler eventHandler,
-        FluidView view,
-        IParticleSystem particleSystem)
+        FluidView view)
     {
         _view = view;
-        _model = particleSystem;
         Dictionary<Key, Vector2D<float>> directions = new()
         {
             [Key.W] = new Vector2D<float>(0, -1),

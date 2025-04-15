@@ -12,6 +12,7 @@ layout(push_constant) uniform PushConstants {
     vec2 xrange;
     vec2 yrange;
     vec2 minMax;
+    int visualizationIndex;
 }push;
 
 
@@ -37,6 +38,8 @@ float remap(float val)
 {
     return max(0, (val -push.minMax.x)/max(dot(push.minMax, vec2(-1, 1)), 0.00001));
 }
+
+float array[3] = float[3] (remap(density), remap(length(instanceOffset)), remap(pressure));
 void main() {
     vec2 dpos = vec2((push.xrange.y - push.xrange.x), (push.yrange.y - push.yrange.x));
     
@@ -46,6 +49,6 @@ void main() {
     vec2 newPos = inPosition*0.001f/dpos + pos;
     
     gl_Position = vec4(newPos, 0.0, 1.0);
-    fragColor = vec4(temperatureGradient(remap(density)),1);
+    fragColor = vec4(temperatureGradient(array[push.visualizationIndex]),1);
     uv = inPosition;
 }
