@@ -192,7 +192,7 @@ public class VkCommandRecordingScope : IDisposable
             imageMemoryBarriers);
     }
 
-    public void BindIndexBuffer(VkBuffer<uint> buffer,
+    public void BindIndexBuffer(IVkBuffer buffer,
         ulong offset,
         IndexType indexType)
 
@@ -267,10 +267,11 @@ public class VkCommandRecordingRenderObject(VkContext ctx,
     public void DrawIndexed(uint indexCount,
         uint instanceCount,
         uint firstIndex,
-        uint firstInstance)
+        uint firstInstance,
+        uint vertexOffset = 0)
     {
         ctx.Api.CmdDrawIndexed(buffer.Buffer, indexCount,
-            instanceCount, firstIndex, 0, firstInstance);
+            instanceCount, firstIndex, (int)vertexOffset, firstInstance);
     }
 
     public void SetScissor(ref Rect2D scissor)

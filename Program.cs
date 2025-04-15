@@ -1,10 +1,10 @@
 ﻿using System.Globalization;
 using Autofac;
 using FluidsVulkan.FluidGPU;
+using FluidsVulkan.ImGui;
 using FluidsVulkan.VkAllocatorSystem;
 using Silk.NET.Core.Native;
 using Silk.NET.Windowing;
-using YamlDotNet.Serialization;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 using Silk.NET.Vulkan.Extensions.KHR;
@@ -22,14 +22,13 @@ public class DisplayFormat
 
 internal class Program
 {
-    private static async Task Main(string[] args)
+    private static void Main(string[] args)
     {
         ThreadPool.SetMaxThreads(Environment.ProcessorCount,
             Environment.ProcessorCount);
         CultureInfo.CurrentCulture = new CultureInfo("en-US", false);
         CultureInfo.CurrentCulture.NumberFormat
             .CurrencyDecimalDigits = 28;
-        var deserializer = new DeserializerBuilder().Build();
 
         var windowOptions = WindowOptions.DefaultVulkan;
         var window = Window.Create(windowOptions);
@@ -59,13 +58,20 @@ internal class Program
         
         InitVulkan(builder, window, windowOptions);
         
-        builder.RegisterType<FluidEngineGpu>().As<IParticleSystem>()
+        builder.RegisterType<FluidEngineGpu>().As<IParticleSystem>().As<IParametrized>()
             .WithParameter("initialData", instances).SingleInstance();
-        builder.RegisterType<EventHandler>().AsSelf();
-        
-        
+        builder.RegisterType<FluidView>().AsSelf().As<IParametrized>().SingleInstance();
+        builder.RegisterType<FluidController>().AsSelf()
+            .SingleInstance();
+        builder.RegisterType<EventHandler>().AsSelf().SingleInstance();
+        builder.RegisterType<ImGuiController>().AsSelf().SingleInstance();
+        builder.RegisterType<Editor>().As<IEditorComponent>();
         var container = builder.Build();
         var gameWindow = container.Resolve<GameWindow>();
+        _ = container.Resolve<FluidView>();
+        _ = container.Resolve<FluidController>();
+        _ = container.Resolve<ImGuiController>();
+        
         
         gameWindow.Run();
 

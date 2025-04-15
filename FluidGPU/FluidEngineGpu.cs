@@ -1,6 +1,8 @@
 using System.Runtime.InteropServices;
 using Autofac.Features.AttributeFilters;
+using FluidsVulkan.ImGui;
 using FluidsVulkan.VkAllocatorSystem;
+using ImGuiNET;
 using Silk.NET.Vulkan;
 
 namespace FluidsVulkan.FluidGPU;
@@ -11,6 +13,8 @@ internal struct UpdatePushConstant
     public uint bufferLength;
     public float perceptionRadius;
     public float delta;
+    public float targetDensity;
+    public float densityMult;
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -27,7 +31,7 @@ internal struct PredictPushConstant
     public float delta;
 }
 
-public class FluidEngineGpu : IParticleSystem
+public class FluidEngineGpu : IParticleSystem, IParametrized
 {
     private readonly VkContext _ctx;
     private readonly VkDevice _device;
@@ -56,6 +60,30 @@ public class FluidEngineGpu : IParticleSystem
     private readonly VkCommandPool _copyPool;
     private VkBuffer<float> _densityBuffer;
     private uint _gridSize = 128;
+    private float _targetDensity = 10;
+    private float _densityMult = 10;
+    private float _perceptionRadius;
+    
+    [SliderFloat("Perception Radius", 0, 1 )]
+    public float PerceptionRadius
+    {
+        get => _perceptionRadius*_gridSize;
+        set => _perceptionRadius = value/(float)_gridSize;
+    }
+
+    [SliderFloat("Target Density", 0, 50 )]
+    public float TargetDensity
+    {
+        get => _targetDensity;
+        set => _targetDensity = value;
+    }
+    
+    [SliderFloat("Density Mult", 0, 1000 )]
+    public float DensityMult
+    {
+        get => _densityMult;
+        set => _densityMult = value;
+    }
     public VkBuffer<Fluid> Buffer => _oldParticles;
 
 
@@ -70,7 +98,7 @@ public class FluidEngineGpu : IParticleSystem
         _boidsCount = (uint)initialData.Length;
         _ctx = ctx;
         _device = device;
-
+        _perceptionRadius = 1.0f/_gridSize;
         _allocator = allocator;
         _stagingAllocator = stagingAllocator;
         _bucketSizes = new VkTexture(ImageType.Type2D,
@@ -211,8 +239,6 @@ public class FluidEngineGpu : IParticleSystem
 
         _updateShader.SetBufferStorage(0, _newParticles,
             AccessFlags.ShaderReadBit);
-        _updateShader.SetBufferStorage(1, _densityBuffer,
-            AccessFlags.ShaderReadBit);
         _updateShader.SetBufferStorage(2, _oldParticles,
             AccessFlags.ShaderWriteBit);
         _updateShader.SetImageStorage(3, _prefixSumView,
@@ -240,15 +266,13 @@ public class FluidEngineGpu : IParticleSystem
             "shader_objects/density.comp.spv");
 
         _densityShader.SetBufferStorage(0, _newParticles,
-            AccessFlags.ShaderReadBit);
-        _densityShader.SetBufferStorage(1, _densityBuffer,
-            AccessFlags.ShaderWriteBit);
+            AccessFlags.ShaderReadBit | AccessFlags.ShaderWriteBit);
         _densityShader.SetImageStorage(2, _prefixSumView,
             AccessFlags.ShaderReadBit);
         _densityShader.SetPushConstant(new DensityPushConstant()
         {
             bufferLength = _boidsCount,
-            perceptionRadius = 1 / (float)_gridSize
+            perceptionRadius = _perceptionRadius
         });
     }
 
@@ -289,7 +313,9 @@ public class FluidEngineGpu : IParticleSystem
             {
                 bufferLength = _boidsCount,
                 delta = (float)delta,
-                perceptionRadius = 1 / (float)_gridSize
+                perceptionRadius = _perceptionRadius,
+                densityMult = _densityMult,
+                targetDensity = _targetDensity
             });
             _updateShader.RecordDispatch(recording,
                 (uint)Math.Ceiling(_boidsCount / 1024.0),

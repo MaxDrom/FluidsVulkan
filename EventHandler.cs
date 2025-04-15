@@ -9,7 +9,7 @@ public class EventHandler : IDisposable
     private IKeyboard _keyboard;
     private IMouse _mouse;
     private IInputContext _inputContext;
-
+    public IInputContext InputContext => _inputContext;
     // Клавиши
     private HashSet<Key> _prevKeys = [];
     private HashSet<Key> _currentKeys = [];

@@ -1,7 +1,10 @@
+using System.Numerics;
 using System.Runtime.InteropServices;
 using Autofac.Features.AttributeFilters;
 using FluidsVulkan.Builders;
+using FluidsVulkan.ImGui;
 using FluidsVulkan.VkAllocatorSystem;
+using ImGuiNET;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 
@@ -12,9 +15,10 @@ public struct PushConstant
 {
     public Vector2D<float> xrange;
     public Vector2D<float> yrange;
+    public Vector2D<float> minMax;
 }
 
-public sealed class FluidView : IDisposable
+public sealed class FluidView : IDisposable, IParametrized
 {
     private readonly uint[] _indices = [0, 1, 2, 2, 3, 0];
 
@@ -59,14 +63,11 @@ public sealed class FluidView : IDisposable
     private VkAllocator _stagingAllocator;
     private VkFrameBuffer _framebuffer;
     private VkFence _copyFence;
-    
-    
+
+
     public float Scale
     {
-        get
-        {
-            return _scale;
-        }
+        get { return _scale; }
         set
         {
             switch (value)
@@ -84,21 +85,17 @@ public sealed class FluidView : IDisposable
 
             if (_scale + _boxCenter.X > 1)
                 _boxCenter.X = 1 - _scale;
-            
+
             if (_scale + _boxCenter.Y > 1)
                 _boxCenter.Y = 1 - _scale;
         }
-        
     }
 
     private float _scale = 1f;
 
     public Vector2D<float> BoxCenter
     {
-        get
-        {
-            return _boxCenter;
-        }
+        get { return _boxCenter; }
         set
         {
             _boxCenter = value;
@@ -106,28 +103,52 @@ public sealed class FluidView : IDisposable
                 _boxCenter.X = 0;
             if (value.Y < 0)
                 _boxCenter.Y = 0;
-            if(value.X + Scale > 1)
-                _boxCenter.X = 1-Scale;
-            if(value.Y + Scale > 1)
-                _boxCenter.Y = 1-Scale;
+            if (value.X + Scale > 1)
+                _boxCenter.X = 1 - Scale;
+            if (value.Y + Scale > 1)
+                _boxCenter.Y = 1 - Scale;
         }
     }
 
     private Vector2D<float> _boxCenter = new(0.0f, 0.0f);
+    private readonly Extent2D _extent;
+    private readonly IParticleSystem _fluidEngine;
+    private Vector2 _tempMinMax = new Vector2(5, 30);
+
+    [SliderFloat2("Colormap min max", -1000,
+        1000, "%.1f", ImGuiSliderFlags.Logarithmic)]
+    public Vector2 TempMinMax
+    {
+        get => _tempMinMax;
+        set
+        {
+            _tempMinMax = value;
+            if(_tempMinMax.X>_tempMinMax.Y)
+                _tempMinMax.X = _tempMinMax.Y;
+            if(_tempMinMax.Y < _tempMinMax.X)
+                _tempMinMax.Y = _tempMinMax.X;
+        }
+    }
+
     public FluidView(VkContext ctx,
         VkDevice device,
         [MetadataFilter("Type", "DeviceLocal")]
         VkAllocator allocator,
         [MetadataFilter("Type", "HostVisible")]
         VkAllocator stagingAllocator,
-        VkImageView renderTarget,
-        Extent3D extent)
+        IParticleSystem fluidEngine,
+        GameWindow window)
     {
+        _fluidEngine = fluidEngine;
         _device = device;
         _stagingAllocator = stagingAllocator;
         _allocator = allocator;
         _ctx = ctx;
+        var renderTarget = window.RenderTarget;
+        _extent = window.WindowSize;
 
+        window.OnRender += RecordDraw;
+        window.OnUpdateAsync += Update;
 
         var subPass = new VkSubpassInfo(PipelineBindPoint.Graphics, [
             new AttachmentReference
@@ -145,8 +166,8 @@ public sealed class FluidView : IDisposable
             StoreOp = AttachmentStoreOp.Store,
             StencilLoadOp = AttachmentLoadOp.DontCare,
             StencilStoreOp = AttachmentStoreOp.DontCare,
-            InitialLayout = ImageLayout.Undefined,
-            FinalLayout = ImageLayout.TransferSrcOptimal,
+            InitialLayout = ImageLayout.General,
+            FinalLayout = ImageLayout.General,
         };
 
         var dependency = new SubpassDependency
@@ -166,8 +187,8 @@ public sealed class FluidView : IDisposable
 
         _framebuffer =
             new VkFrameBuffer(_ctx, _device, _renderPass,
-                extent.Width,
-                extent.Height, 1, [renderTarget]);
+                _extent.Width,
+                _extent.Height, 1, [renderTarget]);
 
         _graphicsPipeline = CreateGraphicsPipeline(_ctx, _device,
             _renderPass, new Extent2D(1, 1));
@@ -190,13 +211,21 @@ public sealed class FluidView : IDisposable
 
         CopyDataToBuffer(_indices, _indexBuffer);
         CopyDataToBuffer(_vertices, _vertexBuffer);
+
+        Update(1 / 240.0, 0).GetAwaiter().GetResult();
     }
 
     public void RecordDraw(
-        Rect2D scissor,
-        Viewport viewport,
-        VkCommandRecordingScope recording)
+        VkCommandRecordingScope recording,
+        Rect2D scissor)
     {
+        var viewport = new Viewport()
+        {
+            X = 0,
+            Y = 0,
+            Width = _extent.Width,
+            Height = _extent.Height
+        };
         using var renderRecording =
             recording.BeginRenderPass(_renderPass,
                 _framebuffer, scissor);
@@ -204,8 +233,11 @@ public sealed class FluidView : IDisposable
 
         var pushConstant = new PushConstant()
         {
-            xrange = new Vector2D<float>(BoxCenter.X, BoxCenter.X+Scale),
-            yrange = new Vector2D<float>(BoxCenter.Y, BoxCenter.Y+Scale),
+            xrange =
+                new Vector2D<float>(BoxCenter.X, BoxCenter.X + Scale),
+            yrange =
+                new Vector2D<float>(BoxCenter.Y, BoxCenter.Y + Scale),
+            minMax = new Vector2D<float>(_tempMinMax.X, _tempMinMax.Y)
         };
         recording.SetPushConstant(_graphicsPipeline,
             ShaderStageFlags.VertexBit, ref pushConstant);
@@ -220,25 +252,28 @@ public sealed class FluidView : IDisposable
                    (ulong)Marshal.SizeOf<Fluid>()), 0, 0);
     }
 
-    public async Task Update(VkBuffer<Fluid> buffer)
+    public async Task Update(double frameTime, double totalTime)
     {
+        await _fluidEngine.Update(1 / 240.0, totalTime);
         _instanceBuffer ??= new VkBuffer<Fluid>(
-            buffer.Size,
+            _fluidEngine.Buffer.Size,
             BufferUsageFlags.VertexBufferBit |
             BufferUsageFlags.TransferDstBit,
             SharingMode.Exclusive,
             _allocator);
-        
-        
+
+
         _copyFence.Reset();
         _copyBuffer.Reset(CommandBufferResetFlags.None);
         using (var recording =
                _copyBuffer.Begin(CommandBufferUsageFlags
                    .OneTimeSubmitBit))
         {
-            recording.CopyBuffer(buffer, _instanceBuffer, 0, 0, buffer.Size);
+            recording.CopyBuffer(_fluidEngine.Buffer, _instanceBuffer,
+                0, 0,
+                _fluidEngine.Buffer.Size);
         }
-        
+
         _copyBuffer.Submit(_device.TransferQueue, _copyFence, [], []);
 
         await _copyFence.WaitFor();

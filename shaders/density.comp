@@ -2,22 +2,18 @@
 //#extension GL_EXT_debug_printf : enable
 layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
 
-struct Boid
-{
+struct Boid {
     vec2 pos;
     vec2 vel;
-    vec4 col;
+    float density;
+    float pressure;
 };
 
-layout(std430, binding = 0) readonly buffer boidsBufferIn
+layout(std430, binding = 0) buffer boidsBufferIn
 {
     Boid boids_in[];
 };
 
-layout(std430, binding = 1) writeonly buffer densityBuffer
-{
-    float densities[];
-};
 
 layout(binding=2, r32ui) readonly uniform uimage2D prefixSum;
 
@@ -82,7 +78,7 @@ void main()
             start_ind = end_ind;
         }
     }
-    densities[id] = density;
+    boids_in[id].density = density;
     
     
 }

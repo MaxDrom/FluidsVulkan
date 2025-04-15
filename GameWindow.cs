@@ -38,11 +38,18 @@ public sealed class GameWindow : IDisposable
     private VkImageView _textureBufferView;
     private double _totalFrameTime;
     private List<VkImageView> _views;
-    private IParticleSystem _particleSystem;
     private WindowOptions _windowOptions;
     private readonly IWindow _window;
     private readonly VkCommandPool _commandPoolTransfer;
-    private FluidController _controller;
+
+    public VkImageView RenderTarget => _textureBufferView;
+    public Extent2D WindowSize => new Extent2D(_textureBuffer.Extent.Width, _textureBuffer.Extent.Height);
+    
+    
+    public event Func<double, double, Task> OnUpdateAsync;
+    public event Action<double, double> OnUpdate;
+    public event Action<VkCommandRecordingScope, Rect2D> OnRender;
+    
     public GameWindow(
         VkContext ctx,
         VkDevice device,
@@ -51,7 +58,6 @@ public sealed class GameWindow : IDisposable
         VkAllocator allocator,
         [MetadataFilter("Type", "HostVisible")]
         VkAllocator stagingAllocator,
-        IParticleSystem particleSystem,
         IWindow window,
         EventHandler eventHandler)
     {
@@ -62,7 +68,6 @@ public sealed class GameWindow : IDisposable
         _colorSpace = displayFormat.ColorSpace;
         _allocator = allocator;
         _stagingAllocator = stagingAllocator;
-        _particleSystem = particleSystem;
         _windowOptions = displayFormat.WindowOptions;
         _window = window;
      
@@ -84,11 +89,6 @@ public sealed class GameWindow : IDisposable
             _commandPool.AllocateBuffers(CommandBufferLevel.Primary,
                 FramesInFlight);
 
-        _view = new FluidView(ctx, device, _allocator,
-            _stagingAllocator, _textureBufferView,
-            _textureBuffer.Extent);
-
-        _view.Update(_particleSystem.Buffer);
 
         //for (var i = 0; i < _views.Count; i++)
           //  RecordBuffer(_buffers[i], i);
@@ -111,18 +111,17 @@ public sealed class GameWindow : IDisposable
         }
         
         
-        _controller =
-            new FluidController(_eventHandler, _view, _particleSystem);
 
         _frameIndex = 0;
         _totalFrameTime = 0d;
         _fps = 0;
-        _window.Render += OnRender;
+        _window.Render += Render;
         _window.Closing +=
             () => _ctx.Api.DeviceWaitIdle(_device.Device);
         _window.Resize += OnResize;
-        _window.Update += x => OnUpdate(x).GetAwaiter().GetResult();
-        
+        _window.Update += x => Update(x).GetAwaiter().GetResult();
+        _window.Update += (x)=>OnUpdate?.Invoke(x, _totalTime);
+
     }
 
     public void Dispose()
@@ -144,7 +143,6 @@ public sealed class GameWindow : IDisposable
 
             _commandPool.Dispose();
             _commandPoolTransfer.Dispose();
-            _view.Dispose();
             _textureBufferView.Dispose();
             _textureBuffer.Dispose();
             _swapchain.Dispose();
@@ -325,9 +323,7 @@ public sealed class GameWindow : IDisposable
             _views.Add(new VkImageView(_ctx, _device, image, mapping,
                 subresourceRange));
     }
-
-    private FluidView _view;
-
+    
     private bool _firstRun = true;
     private uint _imageIndex;
 
@@ -374,8 +370,10 @@ public sealed class GameWindow : IDisposable
             DependencyFlags.None, imageMemoryBarriers: [bb]);
 
 
-        _view.RecordDraw(scissor, viewport,
-            recording);
+        // _view.RecordDraw(scissor, viewport,
+        //     recording);
+        
+        OnRender?.Invoke(recording, scissor);
 
         var region = new ImageBlit()
         {
@@ -399,7 +397,7 @@ public sealed class GameWindow : IDisposable
             new()
             {
                 SType = StructureType.ImageMemoryBarrier,
-                OldLayout = ImageLayout.Undefined,
+                OldLayout = ImageLayout.General,
                 NewLayout = ImageLayout.TransferSrcOptimal,
                 SrcAccessMask =
                     AccessFlags.ColorAttachmentWriteBit,
@@ -467,7 +465,7 @@ public sealed class GameWindow : IDisposable
 
     static double _fixedUpdateInterval = 1/60.0;
     static double _timeFromFixedUpdate = _fixedUpdateInterval;
-    private async Task OnUpdate(double frameTime)
+    private async Task Update(double frameTime)
     {
         _eventHandler.Update();
         if (_firstRun)
@@ -487,20 +485,20 @@ public sealed class GameWindow : IDisposable
         }
         
         
-        _timeFromFixedUpdate += frameTime;
-        for (int step = 0; step<2 && _timeFromFixedUpdate >= _fixedUpdateInterval; step++)
-        {
-            await _particleSystem.Update(_fixedUpdateInterval/5, _totalTime);
-            _timeFromFixedUpdate -= _fixedUpdateInterval;
-        }
+        // _timeFromFixedUpdate += frameTime;
+        // for (int step = 0; step<2 && _timeFromFixedUpdate >= _fixedUpdateInterval; step++)
+        // {
+        //     await _particleSystem.Update(_fixedUpdateInterval/5, _totalTime);
+        //     _timeFromFixedUpdate -= _fixedUpdateInterval;
+        // }
+        //
+        if(OnUpdateAsync!=null)
+            await OnUpdateAsync!.Invoke(frameTime, _totalTime);
         
-        
-        
-        await _view.Update(_particleSystem.Buffer);
         _totalTime += frameTime;
     }
 
-    private void OnRender(double frameTime)
+    private void Render(double frameTime)
     {
         _fences[_frameIndex].WaitFor().GetAwaiter().GetResult();
         if (_swapchain.AcquireNextImage(_device,

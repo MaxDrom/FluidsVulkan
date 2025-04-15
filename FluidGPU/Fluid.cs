@@ -13,7 +13,10 @@ public struct Fluid : IVertexData<Fluid>
     
     [VertexInputDescription(4, Format.R32G32Sfloat)]
     public Vector2D<float> velocity;
+
+    [VertexInputDescription(5, Format.R32Sfloat)]
+    public float Density;
     
-    [VertexInputDescription(3, Format.R32G32B32A32Sfloat)]
-    public Vector4D<float> color;
+    [VertexInputDescription(6, Format.R32Sfloat)]
+    public float Pressure;
 }
