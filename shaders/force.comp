@@ -30,7 +30,9 @@ layout(push_constant) uniform PushConstants {
 }push;
 
 ivec2 imSize = imageSize(prefixSum);
-
+ivec2 posmod(ivec2 x, ivec2 y) {
+    return (x % y + y) % y;
+}
 ivec2 getTexCoords(uint id) {
     return ivec2(id%imSize.x, id/imSize.x);
 }
@@ -53,10 +55,11 @@ float SmoothFunction(float radius, float dist) {
     return value*value*value/volume;
 }
 
+float volume = PI*pow(push.perceptionRadius*256, 5)/10;
 float SmoothFunctionSlope(float radius, float dist) {
     radius = radius*256;
     dist = dist*256;
-    float volume = PI*pow(radius, 5)/10;
+    //float volume = PI*pow(radius, 5)/10;
     float value = max(0, radius - dist);
     return -3*value*value/volume;
 }
@@ -75,32 +78,40 @@ vec2 forceToBlackHole(vec2 pos) {
     return vec2(0);
     return 0.005*normalize(toBlackHole)/(r*r);
 }
-ivec2 posmod(ivec2 x, ivec2 y) {
-    return (x % y + y) % y;
-}
+
 void main() {
     uint id = gl_GlobalInvocationID.x;
     if (id>=push.bufferLength)
     return;
 
     Boid boid = boids_in[id];
-    ivec2 grid_id = posmod(ivec2(floor(boid.pos*(imSize-ivec2(1)))),imSize);
+    ivec2 grid_id = ivec2(floor(boid.pos*(imSize-ivec2(1))));
 
-    int y_end = min(grid_id.y+2, imSize.y);
-    int y_start = max(grid_id.y-1, 0);
-    int x_end = min(grid_id.x+2, imSize.x);
-    int x_start = max(grid_id.x-1, 0);
+    int y_end = grid_id.y+2;
+    int y_start = grid_id.y-1;
+    int x_end = grid_id.x+2;
+    int x_start = grid_id.x-1;
 
     vec2 force = vec2(0);
     vec2 averageVel = vec2(0);
-    for (int y = y_start; y<y_end; y++) {
-        int x = x_start;
-        int it_ind = x+ (y*imSize.x);
-        int start_ind = int(imageLoad(prefixSum, getTexCoords(it_ind-1)).r);
 
-        for (x = x_start; x< x_end; x++) {
-            int end_ind = min(int(imageLoad(prefixSum, ivec2(x, y)).r), int(start_ind + maxSteps));
+    for (int y = y_start; y<y_end; y++) {
+        for (int x = x_start; x< x_end; x++) {
+
+            ivec2 cell = posmod(ivec2(x, y), imSize);
+            int cell_ind = cell.x+cell.y*imSize.x;
+            int previos_cell = cell_ind - 1;
+            int start_ind = 0;
+            if (previos_cell >= 0)
+            {
+                start_ind = int(imageLoad(prefixSum, getTexCoords(previos_cell)).r);
+            }
+            ivec2 previos_cell_coords = getTexCoords(previos_cell);
+            //debugPrintfEXT("%i %i %i %i", cell.x, cell.y, previos_cell_coords.x, previos_cell_coords.y);
+            int end_ind = min(int(imageLoad(prefixSum, cell).r), int(start_ind + maxSteps));
             for (uint i = start_ind; i< end_ind; i++) {
+                if (i == id)
+                continue;
                 Boid neign = boids_in[i];
                 vec2 dist = boid.pos-neign.pos;
 
@@ -109,24 +120,22 @@ void main() {
                 if (d>=push.perceptionRadius)
                 continue;
                 averageVel+=ViscSmoothFunction(push.perceptionRadius, d)/neign.density*(neign.vel-boid.vel);
-                if (i == id)
-                continue;
-
                 float slope = SmoothFunctionSlope(push.perceptionRadius, d);
                 float density = neign.density;
                 float p = (Pressure(density) + Pressure(boid.density))/2;
-                if (d>0.00000001) {
+                if (d>0.000001) {
                     vec2 dir = normalize(dist);
                     force -= p*slope*dir/density;
                 }
                 else
-                force += vec2(sign(id - push.bufferLength/2), 0)*p*slope/density;
+                force += vec2(1, 0)*p*slope/density;
             }
-            start_ind = end_ind;
         }
     }
-    boid.pressure = Pressure(boid.density);
+    //debugPrintfEXT("%f", length(force));
+//    boid.pressure = Pressure(boid.density);
     force += push.viscosityMult*averageVel*length(averageVel);// - 2*boid.vel*length(boid.vel);
+    //debugPrintfEXT("%f", boid.density);
     boid.vel += force/boid.density*push.delta+forceToBlackHole(boid.pos)*push.delta;
 
     boids_out[id] = boid;

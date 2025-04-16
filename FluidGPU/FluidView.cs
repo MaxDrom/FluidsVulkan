@@ -69,27 +69,12 @@ public sealed class FluidView : IDisposable, IParametrized
 
     public float Scale
     {
-        get { return _scale; }
+        get => _scale;
         set
         {
-            switch (value)
-            {
-                case > 1:
-                    _scale = 1;
-                    return;
-                case < 0.1f:
-                    _scale = 0.1f;
-                    return;
-                default:
-                    _scale = value;
-                    break;
-            }
-
-            if (_scale + _boxCenter.X > 1)
-                _boxCenter.X = 1 - _scale;
-
-            if (_scale + _boxCenter.Y > 1)
-                _boxCenter.Y = 1 - _scale;
+            _scale = value;
+            if (_scale <= 0)
+                _scale = 0.001f;
         }
     }
 
@@ -97,22 +82,11 @@ public sealed class FluidView : IDisposable, IParametrized
 
     public Vector2D<float> BoxCenter
     {
-        get { return _boxCenter; }
-        set
-        {
-            _boxCenter = value;
-            if (value.X < 0)
-                _boxCenter.X = 0;
-            if (value.Y < 0)
-                _boxCenter.Y = 0;
-            if (value.X + Scale > 1)
-                _boxCenter.X = 1 - Scale;
-            if (value.Y + Scale > 1)
-                _boxCenter.Y = 1 - Scale;
-        }
+        get => _boxCenter;
+        set => _boxCenter = value;
     }
-    
-    private Vector2D<float> _boxCenter = new(0.0f, 0.0f);
+
+    private Vector2D<float> _boxCenter = new(0.5f, 0.5f);
     private readonly Extent2D _extent;
     private readonly IParticleSystem _fluidEngine;
     private Vector2 _tempMinMax = new(5, 30);
@@ -249,9 +223,9 @@ public sealed class FluidView : IDisposable, IParametrized
         var pushConstant = new PushConstant()
         {
             xrange =
-                new Vector2D<float>(BoxCenter.X, BoxCenter.X + Scale),
+                new Vector2D<float>(BoxCenter.X-Scale/2, BoxCenter.X + Scale/2),
             yrange =
-                new Vector2D<float>(BoxCenter.Y, BoxCenter.Y + Scale),
+                new Vector2D<float>(BoxCenter.Y-Scale/2, BoxCenter.Y + Scale/2),
             minMax =
                 new Vector2D<float>(_tempMinMax.X, _tempMinMax.Y),
             visualizationIndex = VisualisationIndex,

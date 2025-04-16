@@ -36,7 +36,7 @@ internal class Program
         windowOptions.WindowState = WindowState.Maximized;
         var window = Window.Create(windowOptions);
         //
-        var numberOfParticles = 256*1024;
+        var numberOfParticles = 512*1024;
         var instances = new Fluid[numberOfParticles];
         var random = new Random();
         for (var i = 0; i < numberOfParticles; i++)

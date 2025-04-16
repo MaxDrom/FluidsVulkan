@@ -58,9 +58,9 @@ public class FluidEngineGpu : IParticleSystem, IParametrized
     private readonly VkCommandBuffer _cmdBufferCopy;
     private readonly VkCommandPool _copyPool;
     private VkBuffer<float> _densityBuffer;
-    private uint _gridSize = 128;
-    private float _targetDensity = 10;
-    private float _densityMult = 10;
+    private uint _gridSize = 256;
+    private float _targetDensity = 0;
+    private float _densityMult = 1;
     private float _perceptionRadius;
     
     [SliderFloat("Perception Radius", 0, 1 )]

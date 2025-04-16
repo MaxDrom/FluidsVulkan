@@ -1,9 +1,10 @@
 #version 450
 layout(location = 0) in vec2 inPosition;
+layout(location = 1) in vec4 inColor;
 layout(location = 2) in vec2 instancePos;
-layout(location = 4) in vec2 instanceOffset;
-layout(location = 5) in float density;
-layout(location = 6) in float pressure;
+layout(location = 3) in vec2 instanceOffset;
+layout(location = 4) in float density;
+layout(location = 5) in float pressure;
 
 layout(location = 0) out vec4 fragColor;
 layout(location = 1) out vec2 uv;
