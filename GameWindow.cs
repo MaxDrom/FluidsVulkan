@@ -44,13 +44,15 @@ public sealed class GameWindow : IDisposable
     private readonly VkCommandPool _commandPoolTransfer;
 
     public VkImageView RenderTarget => _textureBufferView;
-    public Extent2D WindowSize => new Extent2D(_textureBuffer.Extent.Width, _textureBuffer.Extent.Height);
-    
-    
+
+    public Extent2D WindowSize => new Extent2D(
+        _textureBuffer.Extent.Width, _textureBuffer.Extent.Height);
+
+
     public event Func<double, double, Task> OnUpdateAsync;
     public event Action<double, double> OnUpdate;
     public event Action<VkCommandRecordingScope, Rect2D> OnRender;
-    
+
     public GameWindow(
         VkContext ctx,
         VkDevice device,
@@ -91,7 +93,7 @@ public sealed class GameWindow : IDisposable
 
 
         //for (var i = 0; i < _views.Count; i++)
-          //  RecordBuffer(_buffers[i], i);
+        //  RecordBuffer(_buffers[i], i);
 
         _fences = new VkFence[FramesInFlight];
         _imageAvailableSemaphores = new VkSemaphore[FramesInFlight];
@@ -109,8 +111,7 @@ public sealed class GameWindow : IDisposable
             _renderFinishedSemaphores[i] =
                 new VkSemaphore(_ctx, _device);
         }
-        
-        
+
 
         _frameIndex = 0;
         _totalFrameTime = 0d;
@@ -120,8 +121,7 @@ public sealed class GameWindow : IDisposable
             () => _ctx.Api.DeviceWaitIdle(_device.Device);
         _window.Resize += OnResize;
         _window.Update += x => Update(x).GetAwaiter().GetResult();
-        _window.Update += (x)=>OnUpdate?.Invoke(x, _totalTime);
-
+        _window.Update += (x) => OnUpdate?.Invoke(x, _totalTime);
     }
 
     public void Dispose()
@@ -140,7 +140,7 @@ public sealed class GameWindow : IDisposable
                 sem.Dispose();
             foreach (var sem in _renderFinishedSemaphores)
                 sem.Dispose();
-            
+
             _computeFence.Dispose();
             _commandPool.Dispose();
             _commandPoolTransfer.Dispose();
@@ -156,7 +156,7 @@ public sealed class GameWindow : IDisposable
     private void CleanUpSwapchain()
     {
         foreach (var image in _views) image.Dispose();
-            _swapchain.Dispose();
+        _swapchain.Dispose();
     }
 
     private void CreateSwapchain()
@@ -207,8 +207,9 @@ public sealed class GameWindow : IDisposable
     private void CreateRenderTarget()
     {
         _textureBuffer = new VkTexture(ImageType.Type2D,
-            new Extent3D(_swapchain.Extent.Width,
-                _swapchain.Extent.Height, 1), 1, 1, _format,
+            new Extent3D(Math.Max(_swapchain.Extent.Width, 1920),
+                Math.Max(_swapchain.Extent.Height, 1080), 1), 1, 1,
+            _format,
             ImageTiling.Optimal, ImageLayout.Undefined,
             ImageUsageFlags.ColorAttachmentBit |
             ImageUsageFlags.TransferSrcBit |
@@ -217,7 +218,8 @@ public sealed class GameWindow : IDisposable
             SampleCountFlags.Count1Bit, SharingMode.Exclusive,
             _allocator);
 
-        using var stagingBuffer = new VkBuffer<byte>(_textureBuffer.Size,
+        using var stagingBuffer = new VkBuffer<byte>(
+            _textureBuffer.Size,
             BufferUsageFlags.TransferSrcBit, SharingMode.Exclusive,
             _stagingAllocator);
         using (var mapped =
@@ -324,7 +326,7 @@ public sealed class GameWindow : IDisposable
             _views.Add(new VkImageView(_ctx, _device, image, mapping,
                 subresourceRange));
     }
-    
+
     private bool _firstRun = true;
     private uint _imageIndex;
 
@@ -348,7 +350,7 @@ public sealed class GameWindow : IDisposable
         Rect2D scissor = new(new Offset2D(0, 0),
             new Extent2D(_textureBuffer.Extent.Width,
                 _textureBuffer.Extent.Height));
-        
+
         using var recording =
             buffer.Begin(CommandBufferUsageFlags.None);
         var subresourceRange =
@@ -373,7 +375,7 @@ public sealed class GameWindow : IDisposable
 
         // _view.RecordDraw(scissor, viewport,
         //     recording);
-        
+
         OnRender?.Invoke(recording, scissor);
 
         var region = new ImageBlit()
@@ -450,24 +452,25 @@ public sealed class GameWindow : IDisposable
 
     private void OnResize(Vector2D<int> x)
     {
-        
         //_ctx.Api.DeviceWaitIdle(_device.Device);
         var oldSwapchain = _swapchain;
         foreach (var view in _views)
         {
             view.Dispose();
         }
+
         CreateSwapchain();
-        
+
         oldSwapchain.Dispose();
-        
+
         CreateViews();
     }
 
-    static double _fixedUpdateInterval = 1/60.0;
+    static double _fixedUpdateInterval = 1 / 60.0;
     static double _timeFromFixedUpdate = _fixedUpdateInterval;
     private VkCommandBuffer _computeBuffer;
     private VkFence _computeFence;
+
     private async Task Update(double frameTime)
     {
         _eventHandler.Update();
@@ -490,18 +493,22 @@ public sealed class GameWindow : IDisposable
             _totalFrameTime = 0;
             _fps = 0;
         }
-        
-        
-        if(OnUpdateAsync!=null)
+
+
+        if (OnUpdateAsync != null)
             await OnUpdateAsync!.Invoke(frameTime, _totalTime);
-        _computeBuffer.Reset(CommandBufferResetFlags.ReleaseResourcesBit);
-        using (var recording = _computeBuffer.Begin(CommandBufferUsageFlags.SimultaneousUseBit))
+        _computeBuffer.Reset(CommandBufferResetFlags
+            .ReleaseResourcesBit);
+        using (var recording =
+               _computeBuffer.Begin(CommandBufferUsageFlags
+                   .SimultaneousUseBit))
         {
-           await ComputeScheduler.Instance.RecordAll(recording);
+            await ComputeScheduler.Instance.RecordAll(recording);
         }
-        
+
         _computeFence.Reset();
-        _computeBuffer.Submit(_device.ComputeQueue, _computeFence, [], []);
+        _computeBuffer.Submit(_device.ComputeQueue, _computeFence, [],
+            []);
         await _computeFence.WaitFor();
         _totalTime += frameTime;
     }
