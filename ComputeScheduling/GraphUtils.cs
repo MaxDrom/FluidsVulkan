@@ -1,6 +1,6 @@
-namespace FluidsVulkan.ComputeSchduling;
+namespace FluidsVulkan.ComputeScheduling;
 
-public class GraphUtils
+public static class GraphUtils
 {
     private enum NodeState
     {
@@ -14,7 +14,6 @@ public class GraphUtils
         Func<TNode, IEnumerable<TNode>> getNeighbors)
     {
         var states = nodes.ToDictionary(z => z, z => NodeState.White);
-        //var result = new List<List<TNode>>();
         List<TNode> topSort = [];
         while (true)
         {

@@ -69,4 +69,9 @@ public class DependencyGraphBuilder
 
         return null;
     }
+
+    public void Clear()
+    {
+        _tasks.Clear();
+    }
 }

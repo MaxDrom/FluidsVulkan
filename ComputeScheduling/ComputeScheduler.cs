@@ -33,9 +33,9 @@ public class ComputeScheduler
         var topologicalSortOrder = await Task.Run(()=>GraphUtils.TopologicalSort(tasks,
             (task) => edges[task].Select(z => z.To)));
 
-        new ComputeRecorder().Record(recordingScope,
+        _computeRecorder.Record(recordingScope,
             topologicalSortOrder);
-        _dependencyGraphBuilder = new DependencyGraphBuilder();
+        _dependencyGraphBuilder.Clear();
         //return Task.CompletedTask;
     }
 }
@@ -60,8 +60,8 @@ public class ComputeRecorder :
         List<IComputeTask> tasks)
     {
         _pipelineStage = PipelineStageFlags.TopOfPipeBit;
-        //_bufferAccessFlags.Clear();
-        //_imageAccessFlags.Clear();
+        _bufferAccessFlags.Clear();
+        _imageAccessFlags.Clear();
         _scope = scope;
 
         foreach (var task in tasks)
@@ -71,17 +71,11 @@ public class ComputeRecorder :
             var hashset = new HashSet<IComputeResource>();
 
             foreach (var resource in task.Reads)
-            {
                 hashset.Add(resource);
-            }
 
             foreach (var resource in task.Writes)
-            {
                 hashset.Add(resource);
-            }
-
-            // Console.WriteLine(
-            //    $"{task.Reads.Count} {task.Writes.Count} {hashset.Count}");
+            
             foreach (var resource in hashset)
             {
                 var (bufferMemoryBarrier, imageBarrier) =
