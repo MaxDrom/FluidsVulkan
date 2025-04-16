@@ -27,7 +27,9 @@ layout(binding=3, r32ui) uniform uimage2D prefixSum;
 layout(push_constant) uniform PushConstants {
     uint bufferLength;
 }push;
-
+ivec2 posmod(ivec2 x, ivec2 y) {
+    return (x % y + y) % y;
+}
 ivec2 imSize = imageSize(bucketSizes);
 
 void main()
@@ -38,7 +40,7 @@ void main()
 
     Boid boid = boids_in[id];
     //debugPrintfEXT("%f %f %f %f", boid.pos.x, boid.pos.y, (id/100)/99.0, (id%100)/99.0);
-    ivec2 grid_id = ivec2(floor(boid.pos*(imSize-ivec2(1))));
+    ivec2 grid_id = posmod(ivec2(floor(boid.pos*(imSize-ivec2(1)))),imSize);
 
     uint id_n = imageAtomicAdd(bucketSizes, grid_id , 1);
 }

@@ -75,14 +75,16 @@ vec2 forceToBlackHole(vec2 pos) {
     return vec2(0);
     return 0.005*normalize(toBlackHole)/(r*r);
 }
-
+ivec2 posmod(ivec2 x, ivec2 y) {
+    return (x % y + y) % y;
+}
 void main() {
     uint id = gl_GlobalInvocationID.x;
     if (id>=push.bufferLength)
     return;
 
     Boid boid = boids_in[id];
-    ivec2 grid_id = ivec2(floor(boid.pos*(imSize-ivec2(1))));
+    ivec2 grid_id = posmod(ivec2(floor(boid.pos*(imSize-ivec2(1)))),imSize);
 
     int y_end = min(grid_id.y+2, imSize.y);
     int y_start = max(grid_id.y-1, 0);
