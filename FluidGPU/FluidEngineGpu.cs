@@ -52,8 +52,6 @@ public class FluidEngineGpu : IParticleSystem, IParametrized
 
     private VkBuffer<Fluid> _oldParticles;
     private VkBuffer<Fluid> _newParticles;
-    private VkCommandPool _cmdPool;
-    private VkCommandBuffer _cmdBuffer;
     private VkFence _fence;
     private uint _boidsCount;
     private readonly VkCommandBuffer _cmdBufferCopy;
@@ -149,7 +147,8 @@ public class FluidEngineGpu : IParticleSystem, IParametrized
         _oldParticles = new VkBuffer<Fluid>(initialData.Length,
             BufferUsageFlags.StorageBufferBit |
             BufferUsageFlags.TransferSrcBit |
-            BufferUsageFlags.TransferDstBit,
+            BufferUsageFlags.TransferDstBit |
+            BufferUsageFlags.VertexBufferBit,
             SharingMode.Exclusive, _allocator);
 
         _newParticles = new VkBuffer<Fluid>(initialData.Length,
@@ -170,15 +169,7 @@ public class FluidEngineGpu : IParticleSystem, IParametrized
             for (var i = 0; i < initialData.Length; i++)
                 mapped[i] = initialData[i];
         }
-
-        _cmdPool = new VkCommandPool(_ctx, _device,
-            CommandPoolCreateFlags.ResetCommandBufferBit,
-            _device.FamilyIndex);
-
-
-        _cmdBuffer =
-            _cmdPool.AllocateBuffers(CommandBufferLevel.Primary, 1)
-                [0];
+        
         _copyPool = new VkCommandPool(_ctx, _device,
             CommandPoolCreateFlags.ResetCommandBufferBit,
             _device.FamilyIndex);
@@ -277,36 +268,31 @@ public class FluidEngineGpu : IParticleSystem, IParametrized
     }
 
 
-    public async Task Update(double delta, double totalTime)
+    public Task Update(double delta, double totalTime)
     {
-        _cmdBuffer.Reset(CommandBufferResetFlags.None);
-        using (var recording =
-               _cmdBuffer.Begin(CommandBufferUsageFlags
-                   .SimultaneousUseBit))
-        {
+
             _predictShader.SetPushConstant(new PredictPushConstant()
             {
                 bufferLength = _boidsCount,
                 delta = (float)delta,
             });
-            _predictShader.RecordDispatch(recording,
+            _predictShader.Dispatch(
                 (uint)Math.Ceiling(_boidsCount / 1024.0), 1, 1);
 
 
-            _countShader.RecordDispatch(recording,
+            _countShader.Dispatch(
                 (uint)Math.Ceiling(_boidsCount / 1024.0), 1, 1);
 
 
             _prefixSumGpu.RecordBuffer(_bucketSizesView,
-                _prefixSumView, ((int)_gridSize, (int)_gridSize),
-                recording);
+                _prefixSumView, ((int)_gridSize, (int)_gridSize));
 
 
-            _replaceShader.RecordDispatch(recording,
+            _replaceShader.Dispatch(
                 (uint)Math.Ceiling(_boidsCount / 1024.0),
                 1, 1);
 
-            _densityShader.RecordDispatch(recording,
+            _densityShader.Dispatch(
                 (uint)Math.Ceiling(_boidsCount / 1024.0), 1, 1);
 
             _updateShader.SetPushConstant(new UpdatePushConstant()
@@ -317,14 +303,10 @@ public class FluidEngineGpu : IParticleSystem, IParametrized
                 densityMult = _densityMult,
                 targetDensity = _targetDensity
             });
-            _updateShader.RecordDispatch(recording,
+            _updateShader.Dispatch(
                 (uint)Math.Ceiling(_boidsCount / 1024.0),
                 1, 1);
-        }
-
-        _cmdBuffer.Submit(_device.ComputeQueue, _fence, [], []);
-        await _fence.WaitFor();
-        _fence.Reset();
+            return Task.CompletedTask;
     }
 
     private void InitTexture(VkTexture texture)
@@ -423,7 +405,6 @@ public class FluidEngineGpu : IParticleSystem, IParametrized
         _replaceShader.Dispose();
         _densityShader.Dispose();
         _updateShader.Dispose();
-        _cmdPool.Dispose();
         _prefixSumGpu.Dispose();
         _prefixSumView.Dispose();
         _prefixSum.Dispose();

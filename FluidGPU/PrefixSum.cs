@@ -13,8 +13,7 @@ internal sealed class PrefixSumGPU(VkContext ctx,
 
     public void RecordBuffer(VkImageView source,
         VkImageView destination,
-        (int, int) textureSize,
-        VkCommandRecordingScope recording)
+        (int, int) textureSize)
     {
         _computeShader.SetImageStorage(0, source,
             AccessFlags.ShaderReadBit);
@@ -26,7 +25,7 @@ internal sealed class PrefixSumGPU(VkContext ctx,
              offset += 1024)
         {
             _computeShader.SetPushConstant(offset);
-            _computeShader.RecordDispatch(recording, 1, 1, 1);
+            _computeShader.Dispatch(1, 1, 1);
         }
     }
 

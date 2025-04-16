@@ -29,7 +29,6 @@ public class RefLikeProperty<T>(T value) : IRefLikeProperty
 }
 
 
-
 public abstract class ImGuiAttribute : Attribute
 {
     public abstract IRefLikeProperty ApplyAttribute(object value);

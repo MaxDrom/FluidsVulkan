@@ -1,4 +1,5 @@
 using Autofac.Features.AttributeFilters;
+using FluidsVulkan.ComputeScheduling;
 using FluidsVulkan.FluidGPU;
 using FluidsVulkan.VkAllocatorSystem;
 using Silk.NET.Maths;
@@ -465,11 +466,17 @@ public sealed class GameWindow : IDisposable
 
     static double _fixedUpdateInterval = 1/60.0;
     static double _timeFromFixedUpdate = _fixedUpdateInterval;
+    private VkCommandBuffer _computeBuffer;
+    private VkFence _computeFence;
     private async Task Update(double frameTime)
     {
         _eventHandler.Update();
         if (_firstRun)
         {
+            _computeFence = new VkFence(_ctx, _device);
+            _computeBuffer =
+                _commandPool.AllocateBuffers(
+                    CommandBufferLevel.Primary, 1)[0];
             _firstRun = false;
             _totalTime = 0;
             return;
@@ -494,7 +501,15 @@ public sealed class GameWindow : IDisposable
         //
         if(OnUpdateAsync!=null)
             await OnUpdateAsync!.Invoke(frameTime, _totalTime);
+        _computeBuffer.Reset(CommandBufferResetFlags.ReleaseResourcesBit);
+        using (var recording = _computeBuffer.Begin(CommandBufferUsageFlags.SimultaneousUseBit))
+        {
+            ComputeScheduler.Instance.RecordAll(recording);
+        }
         
+        _computeFence.Reset();
+        _computeBuffer.Submit(_device.ComputeQueue, _computeFence, [], []);
+        await _computeFence.WaitFor();
         _totalTime += frameTime;
     }
 

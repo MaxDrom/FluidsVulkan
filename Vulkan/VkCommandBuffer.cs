@@ -154,6 +154,23 @@ public class VkCommandRecordingScope : IDisposable
         _ctx.Api.CmdCopyBuffer(_buffer.Buffer, src.Buffer,
             dst.Buffer, 1, in region);
     }
+    
+    public void CopyBuffer(IVkBuffer src,
+        IVkBuffer dst,
+        ulong srcOffset,
+        ulong dstOffset,
+        ulong size)
+    {
+        var region = new BufferCopy
+        {
+            SrcOffset = srcOffset,
+            DstOffset = dstOffset,
+            Size = size,
+        };
+        _ctx.Api.CmdCopyBuffer(_buffer.Buffer, src.Buffer,
+            dst.Buffer, 1, in region);
+    }
+
 
     public void BindVertexBuffers(int firstBinding,
         IVkBuffer[] buffers,

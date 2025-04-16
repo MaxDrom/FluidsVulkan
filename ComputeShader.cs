@@ -1,13 +1,26 @@
 using System.Runtime.InteropServices;
+using FluidsVulkan.ComputeSchduling;
+using FluidsVulkan.ComputeScheduling;
 using Silk.NET.Vulkan;
 
 namespace FluidsVulkan;
+
+public interface IComputeShader
+{
+    void RecordDispatch(VkCommandRecordingScope recording,
+        uint threadGroupCountX,
+        uint threadGroupCountY,
+        uint threadGroupCountZ,
+        object pushConstantBoxed);
+}
+
+
 
 public class ComputeShader<T>(VkContext ctx,
     VkDevice device,
     string spvPath
 )
-    : IDisposable
+    : IDisposable, IComputeShader
     where T : unmanaged
 {
     private VkDescriptorPool _descriptorPool;
@@ -118,96 +131,75 @@ public class ComputeShader<T>(VkContext ctx,
         }
         updater.Update();
     }
+
+    public void Dispatch(uint threadGroupCountX,
+        uint threadGroupCountY,
+        uint threadGroupCountZ)
+    {
+        var reads = new List<IComputeResource>();
+        var writes = new List<IComputeResource>();
+        foreach (var (_, (buffer, accessFlags)) in _bufferBindings)
+        {
+            if(accessFlags.HasFlag(AccessFlags.ShaderReadBit))
+                reads.Add(new BufferResource()
+                {
+                    Buffer = buffer,
+                    AccessFlags = accessFlags
+                });
+            
+            if(accessFlags.HasFlag(AccessFlags.ShaderWriteBit))
+                writes.Add(new BufferResource()
+                {
+                    Buffer = buffer,
+                    AccessFlags = accessFlags
+                });
+        }
+        
+        foreach (var (_, (image, accessFlags)) in _imageBindings)
+        {
+            if(accessFlags.HasFlag(AccessFlags.ShaderReadBit))
+                reads.Add(new ImageResource()
+                {
+                    Image = image.Image,
+                    AccessFlags = accessFlags,
+                    Layout = ImageLayout.General
+                });
+            
+            if(accessFlags.HasFlag(AccessFlags.ShaderWriteBit))
+                writes.Add(new ImageResource()
+                {
+                    Image = image.Image,
+                    AccessFlags = accessFlags,
+                    Layout = ImageLayout.General
+                });
+        }
+        ComputeScheduler.Instance.AddTask(new DispatchTaks()
+        {
+            ComputeShader = this,
+            NumGroupsX = threadGroupCountX,
+            NumGroupsY = threadGroupCountY,
+            NumGroupsZ = threadGroupCountZ,
+            Reads = reads,
+            Writes = writes,
+            PushConstant = _pushConstant
+        });
+    }
     
     public void RecordDispatch(VkCommandRecordingScope recording,
         uint threadGroupCountX,
         uint threadGroupCountY,
-        uint threadGroupCountZ)
+        uint threadGroupCountZ,
+        object pushConstantBoxed)
     {
+        var pushConstant = (T)pushConstantBoxed;
         if(_computePipeline == null)
             InitPipeline();
-        var bufferBarriers = new List<BufferMemoryBarrier>();
-        foreach (var (binding, (buffer, dstAccesFlags)) in
-                 _bufferBindings)
-        {
-            var barrier = new BufferMemoryBarrier()
-            {
-                Buffer = buffer.Buffer,
-                DstAccessMask = dstAccesFlags,
-                Offset = 0,
-                Size = buffer.Size,
-                SType = StructureType.BufferMemoryBarrier,
-                SrcAccessMask = AccessFlags.None
-            };
-            if (recording.BuffersScope.TryGetValue(buffer,
-                    out var srcAccessFlag))
-            {
-                if (srcAccessFlag == AccessFlags.ShaderReadBit &&
-                    dstAccesFlags == AccessFlags.ShaderReadBit)
-                    continue;
-                barrier.SrcAccessMask = srcAccessFlag;
-            }
-
-            bufferBarriers.Add(barrier);
-        }
-
-        foreach (var (binding, (buffer, dstAccesFlags)) in
-                 _bufferBindings)
-        {
-            recording.BuffersScope[buffer] = dstAccesFlags;
-        }
-
-        var imageBarriers = new List<ImageMemoryBarrier>();
-        foreach (var (binding, (image, dstAccessMask)) in
-                 _imageBindings)
-        {
-            var barrier = new ImageMemoryBarrier()
-            {
-                SType = StructureType.ImageMemoryBarrier,
-                DstAccessMask = dstAccessMask,
-                Image = image.Image.Image,
-                OldLayout = ImageLayout.General,
-                NewLayout = ImageLayout.General,
-                SubresourceRange = new ImageSubresourceRange(
-                    ImageAspectFlags.ColorBit,
-                    0, 1, 0, 1)
-            };
-            if (recording.ImageScope.TryGetValue(image,
-                    out var srcAccessFlag))
-            {
-                if (srcAccessFlag == AccessFlags.ShaderReadBit)
-                    continue;
-                barrier.SrcAccessMask = srcAccessFlag;
-            }
-
-            imageBarriers.Add(barrier);
-        }
-
-        foreach (var (binding, (buffer, dstAccessFlags)) in
-                 _bufferBindings)
-        {
-            recording.BuffersScope[buffer] = dstAccessFlags; 
-        }
-
-        foreach (var (binding, (image, dstAccessFlags)) in
-                 _imageBindings)
-        {
-            recording.ImageScope[image] = dstAccessFlags;
-        }
-
-        if (bufferBarriers.Count > 0 || imageBarriers.Count > 0)
-            recording.PipelineBarrier(
-                PipelineStageFlags.ComputeShaderBit,
-                PipelineStageFlags.ComputeShaderBit,
-                DependencyFlags.None,
-                bufferMemoryBarriers: [.. bufferBarriers],
-                imageMemoryBarriers: [.. imageBarriers]);
-
+        
         recording.BindPipeline(_computePipeline);
         recording.BindDescriptorSets(PipelineBindPoint.Compute,
             _computePipeline!.PipelineLayout, [_descriptorSet]);
         recording.SetPushConstant(_computePipeline,
-            ShaderStageFlags.ComputeBit, ref _pushConstant);
+            ShaderStageFlags.ComputeBit, ref pushConstant);
         recording.Dispatch(threadGroupCountX, threadGroupCountY,
             threadGroupCountZ);
     }

@@ -2,6 +2,7 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using Autofac.Features.AttributeFilters;
 using FluidsVulkan.Builders;
+using FluidsVulkan.ComputeScheduling;
 using FluidsVulkan.ImGui;
 using FluidsVulkan.VkAllocatorSystem;
 using ImGuiNET;
@@ -131,10 +132,12 @@ public sealed class FluidView : IDisposable, IParametrized
 
     [SliderFloat("Simulation Speed", 0f, 5.0f, "%.1f")]
     public float SimulationSpeed { get; set; } = 1f;
-    
-    
-    [Combo("Color map visualization target", ["Density", "Pressure", "Velocity"])]
+
+
+    [Combo("Color map visualization target",
+        ["Density", "Pressure", "Velocity"])]
     public int VisualisationIndex { get; set; }
+
     public FluidView(VkContext ctx,
         VkDevice device,
         [MetadataFilter("Type", "DeviceLocal")]
@@ -216,8 +219,15 @@ public sealed class FluidView : IDisposable, IParametrized
 
         CopyDataToBuffer(_indices, _indexBuffer);
         CopyDataToBuffer(_vertices, _vertexBuffer);
-
-        Update(1 / 240.0, 0).GetAwaiter().GetResult();
+        
+        _instanceBuffer =  new VkBuffer<Fluid>(
+            _fluidEngine.Buffer.Size,
+            BufferUsageFlags.VertexBufferBit |
+            BufferUsageFlags.TransferDstBit,
+            SharingMode.Exclusive,
+            _allocator);
+        //_instanceBuffer = _fluidEngine.Buffer;
+        //Update(1 / 240.0, 0).GetAwaiter().GetResult();
     }
 
     public void RecordDraw(
@@ -242,7 +252,8 @@ public sealed class FluidView : IDisposable, IParametrized
                 new Vector2D<float>(BoxCenter.X, BoxCenter.X + Scale),
             yrange =
                 new Vector2D<float>(BoxCenter.Y, BoxCenter.Y + Scale),
-            minMax = new Vector2D<float>(_tempMinMax.X, _tempMinMax.Y),
+            minMax =
+                new Vector2D<float>(_tempMinMax.X, _tempMinMax.Y),
             visualizationIndex = VisualisationIndex,
         };
         recording.SetPushConstant(_graphicsPipeline,
@@ -260,15 +271,7 @@ public sealed class FluidView : IDisposable, IParametrized
 
     public async Task Update(double frameTime, double totalTime)
     {
-        await _fluidEngine.Update(1/300.0*SimulationSpeed, totalTime);
-        _instanceBuffer ??= new VkBuffer<Fluid>(
-            _fluidEngine.Buffer.Size,
-            BufferUsageFlags.VertexBufferBit |
-            BufferUsageFlags.TransferDstBit,
-            SharingMode.Exclusive,
-            _allocator);
-
-
+        
         _copyFence.Reset();
         _copyBuffer.Reset(CommandBufferResetFlags.None);
         using (var recording =
@@ -284,6 +287,16 @@ public sealed class FluidView : IDisposable, IParametrized
 
         await _copyFence.WaitFor();
         _copyFence.Reset();
+        
+        await _fluidEngine.Update(1 / 300.0 * SimulationSpeed,
+            totalTime);
+
+        
+
+        
+        // ComputeScheduler.Instance.AddTask(new CopyBufferTask(
+        //     _fluidEngine.Buffer, _instanceBuffer,
+        //     _indexBuffer.Size, 0, 0));
     }
 
     private static VkGraphicsPipeline CreateGraphicsPipeline(
