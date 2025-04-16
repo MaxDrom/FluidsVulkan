@@ -17,7 +17,7 @@ public interface IComputeTask
 
 public interface IComputeTaskVisitor
 {
-    void Visit(DispatchTaks resource);
+    void Visit(DispatchTaks task);
     void Visit(CopyBufferTask resource);
 }
 

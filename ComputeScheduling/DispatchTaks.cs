@@ -9,10 +9,14 @@ public class DispatchTaks : IComputeTask
     public uint NumGroupsX { get; set; }
     public uint NumGroupsY { get; set; }
     public uint NumGroupsZ { get; set; }
-    
+
+    public DescriptorSet DescriptorSet { get; set; }
+
+
     public IComputeShader ComputeShader { get; set; }
     public List<IComputeResource> Reads { get; set; }
     public List<IComputeResource> Writes { get; set; }
+
     public void Accept(IComputeTaskVisitor visitor)
     {
         visitor.Visit(this);
@@ -23,5 +27,6 @@ public class DispatchTaks : IComputeTask
         return visitor.Visit(this);
     }
 
-    public PipelineStageFlags PipelineStage => PipelineStageFlags.ComputeShaderBit;
+    public PipelineStageFlags PipelineStage =>
+        PipelineStageFlags.ComputeShaderBit;
 }

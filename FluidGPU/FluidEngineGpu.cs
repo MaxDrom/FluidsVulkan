@@ -15,6 +15,7 @@ internal struct UpdatePushConstant
     public float delta;
     public float targetDensity;
     public float densityMult;
+    public float viscosityMult;
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -82,6 +83,16 @@ public class FluidEngineGpu : IParticleSystem, IParametrized
         get => _densityMult;
         set => _densityMult = value;
     }
+    
+    private float _viscosityMult = 300f;
+
+    [SliderFloat("Viscosity", 0, 500)]
+    public float ViscosityMult
+    {
+        get => _viscosityMult;
+        set => _viscosityMult = value;
+    }
+
     public VkBuffer<Fluid> Buffer => _oldParticles;
 
 
@@ -147,8 +158,7 @@ public class FluidEngineGpu : IParticleSystem, IParametrized
         _oldParticles = new VkBuffer<Fluid>(initialData.Length,
             BufferUsageFlags.StorageBufferBit |
             BufferUsageFlags.TransferSrcBit |
-            BufferUsageFlags.TransferDstBit |
-            BufferUsageFlags.VertexBufferBit,
+            BufferUsageFlags.TransferDstBit,
             SharingMode.Exclusive, _allocator);
 
         _newParticles = new VkBuffer<Fluid>(initialData.Length,
@@ -301,7 +311,8 @@ public class FluidEngineGpu : IParticleSystem, IParametrized
                 delta = (float)delta,
                 perceptionRadius = _perceptionRadius,
                 densityMult = _densityMult,
-                targetDensity = _targetDensity
+                targetDensity = _targetDensity,
+                viscosityMult = _viscosityMult
             });
             _updateShader.Dispatch(
                 (uint)Math.Ceiling(_boidsCount / 1024.0),

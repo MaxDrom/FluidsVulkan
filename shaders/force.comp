@@ -26,6 +26,7 @@ layout(push_constant) uniform PushConstants {
     float delta;
     float targetDensity;
     float densityMult;
+    float viscosityMult;
 }push;
 
 ivec2 imSize = imageSize(prefixSum);
@@ -123,7 +124,7 @@ void main() {
         }
     }
     boid.pressure = Pressure(boid.density);
-    force += 300*averageVel*length(averageVel);// - 2*boid.vel*length(boid.vel);
+    force += push.viscosityMult*averageVel*length(averageVel);// - 2*boid.vel*length(boid.vel);
     boid.vel += force/boid.density*push.delta+forceToBlackHole(boid.pos)*push.delta;
 
     boids_out[id] = boid;

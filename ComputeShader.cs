@@ -11,10 +11,10 @@ public interface IComputeShader
         uint threadGroupCountX,
         uint threadGroupCountY,
         uint threadGroupCountZ,
-        object pushConstantBoxed);
+        object pushConstantBoxed,
+        DescriptorSet descriptorsSet
+    );
 }
-
-
 
 public class ComputeShader<T>(VkContext ctx,
     VkDevice device,
@@ -25,10 +25,10 @@ public class ComputeShader<T>(VkContext ctx,
 {
     private VkDescriptorPool _descriptorPool;
     private VkSetLayout _layout;
-    private DescriptorSet _descriptorSet;
+    private DescriptorSet[] _descriptorSets;
     private VkComputePipeline _computePipeline = null;
     private T _pushConstant;
-
+    private int _currentSet;
     private Dictionary<int, (IVkBuffer, AccessFlags)>
         _bufferBindings =
             [];
@@ -55,7 +55,7 @@ public class ComputeShader<T>(VkContext ctx,
                     StageFlags = ShaderStageFlags.ComputeBit
                 });
         }
-        
+
         foreach (var (binding, _) in _imageBindings)
         {
             bindings.Add(
@@ -67,14 +67,14 @@ public class ComputeShader<T>(VkContext ctx,
                     StageFlags = ShaderStageFlags.ComputeBit
                 });
         }
-        
+
         _layout = new VkSetLayout(ctx, device, [..bindings]);
         _computePipeline = new VkComputePipeline(ctx, device,
             new VkShaderInfo(shaderModule, "main"), [_layout], [
                 new PushConstantRange(ShaderStageFlags.ComputeBit, 0,
                     (uint)Marshal.SizeOf<T>())
             ]);
-        
+
         var descriprotSizes = new List<DescriptorPoolSize>();
 
         if (bufferCount > 0)
@@ -82,7 +82,7 @@ public class ComputeShader<T>(VkContext ctx,
                 new DescriptorPoolSize()
                 {
                     Type = DescriptorType.StorageBuffer,
-                    DescriptorCount = (uint)bufferCount,
+                    DescriptorCount = (uint)bufferCount*1000,
                 });
 
         if (imagesCount > 0)
@@ -90,20 +90,28 @@ public class ComputeShader<T>(VkContext ctx,
                 new DescriptorPoolSize()
                 {
                     Type = DescriptorType.StorageImage,
-                    DescriptorCount = (uint)imagesCount,
+                    DescriptorCount = (uint)imagesCount*1000,
                 });
 
 
         _descriptorPool = new VkDescriptorPool(ctx, device, [
             .. descriprotSizes
-        ], 1);
-        _descriptorSet =
-            _descriptorPool.AllocateDescriptors(_layout, 1)[0];
+        ], 1000);
+        _descriptorSets =
+            _descriptorPool.AllocateDescriptors(_layout, 1000);
+    }
+
+    public void Dispatch(uint threadGroupCountX,
+        uint threadGroupCountY,
+        uint threadGroupCountZ)
+    {
+        if(_computePipeline == null)
+            InitPipeline();
         var updater = new VkDescriptorSetUpdater(ctx, device);
         foreach (var (binding, (buffer, _)) in _bufferBindings)
         {
             updater = updater
-                .AppendWrite(_descriptorSet, binding,
+                .AppendWrite(_descriptorSets[_currentSet], binding,
                     DescriptorType.StorageBuffer,
                     [
                         new DescriptorBufferInfo()
@@ -115,10 +123,11 @@ public class ComputeShader<T>(VkContext ctx,
                     ]
                 );
         }
+
         foreach (var (binding, (image, _)) in _imageBindings)
         {
             updater = updater
-                .AppendWrite(_descriptorSet, binding,
+                .AppendWrite(_descriptorSets[_currentSet], binding,
                     DescriptorType.StorageImage,
                     [
                         new DescriptorImageInfo()
@@ -129,43 +138,40 @@ public class ComputeShader<T>(VkContext ctx,
                     ]
                 );
         }
-        updater.Update();
-    }
 
-    public void Dispatch(uint threadGroupCountX,
-        uint threadGroupCountY,
-        uint threadGroupCountZ)
-    {
+        updater.Update();
+
+       
         var reads = new List<IComputeResource>();
         var writes = new List<IComputeResource>();
         foreach (var (_, (buffer, accessFlags)) in _bufferBindings)
         {
-            if(accessFlags.HasFlag(AccessFlags.ShaderReadBit))
+            if (accessFlags.HasFlag(AccessFlags.ShaderReadBit))
                 reads.Add(new BufferResource()
                 {
                     Buffer = buffer,
                     AccessFlags = accessFlags
                 });
-            
-            if(accessFlags.HasFlag(AccessFlags.ShaderWriteBit))
+
+            if (accessFlags.HasFlag(AccessFlags.ShaderWriteBit))
                 writes.Add(new BufferResource()
                 {
                     Buffer = buffer,
                     AccessFlags = accessFlags
                 });
         }
-        
+
         foreach (var (_, (image, accessFlags)) in _imageBindings)
         {
-            if(accessFlags.HasFlag(AccessFlags.ShaderReadBit))
+            if (accessFlags.HasFlag(AccessFlags.ShaderReadBit))
                 reads.Add(new ImageResource()
                 {
                     Image = image.Image,
                     AccessFlags = accessFlags,
                     Layout = ImageLayout.General
                 });
-            
-            if(accessFlags.HasFlag(AccessFlags.ShaderWriteBit))
+
+            if (accessFlags.HasFlag(AccessFlags.ShaderWriteBit))
                 writes.Add(new ImageResource()
                 {
                     Image = image.Image,
@@ -173,6 +179,7 @@ public class ComputeShader<T>(VkContext ctx,
                     Layout = ImageLayout.General
                 });
         }
+
         ComputeScheduler.Instance.AddTask(new DispatchTaks()
         {
             ComputeShader = this,
@@ -181,23 +188,24 @@ public class ComputeShader<T>(VkContext ctx,
             NumGroupsZ = threadGroupCountZ,
             Reads = reads,
             Writes = writes,
-            PushConstant = _pushConstant
+            PushConstant = _pushConstant,
+            DescriptorSet = _descriptorSets[_currentSet],
         });
+        
+        _currentSet = (++_currentSet) % 1000;
     }
-    
+
     public void RecordDispatch(VkCommandRecordingScope recording,
         uint threadGroupCountX,
         uint threadGroupCountY,
         uint threadGroupCountZ,
-        object pushConstantBoxed)
+        object pushConstantBoxed,
+        DescriptorSet descriptorSet)
     {
         var pushConstant = (T)pushConstantBoxed;
-        if(_computePipeline == null)
-            InitPipeline();
-        
         recording.BindPipeline(_computePipeline);
         recording.BindDescriptorSets(PipelineBindPoint.Compute,
-            _computePipeline!.PipelineLayout, [_descriptorSet]);
+            _computePipeline!.PipelineLayout, [descriptorSet]);
         recording.SetPushConstant(_computePipeline,
             ShaderStageFlags.ComputeBit, ref pushConstant);
         recording.Dispatch(threadGroupCountX, threadGroupCountY,
@@ -215,20 +223,6 @@ public class ComputeShader<T>(VkContext ctx,
         where TBuf : unmanaged
     {
         _bufferBindings[binding] = (buffer, accessFlags);
-        if(_computePipeline == null)
-            return;
-        new VkDescriptorSetUpdater(ctx, device)
-            .AppendWrite(_descriptorSet, binding,
-                DescriptorType.StorageBuffer,
-                [
-                    new DescriptorBufferInfo()
-                    {
-                        Buffer = buffer.Buffer,
-                        Offset = 0,
-                        Range = buffer.Size
-                    },
-                ]
-            ).Update();
     }
 
     public void SetImageStorage(int binding,
@@ -236,19 +230,6 @@ public class ComputeShader<T>(VkContext ctx,
         AccessFlags accessFlags)
     {
         _imageBindings[binding] = (view, accessFlags);
-        if(_computePipeline == null)
-            return;
-        new VkDescriptorSetUpdater(ctx, device)
-            .AppendWrite(_descriptorSet, binding,
-                DescriptorType.StorageImage,
-                [
-                    new DescriptorImageInfo()
-                    {
-                        ImageLayout = ImageLayout.General,
-                        ImageView = view.ImageView
-                    },
-                ]
-            ).Update();
     }
 
     public void Dispose()

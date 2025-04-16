@@ -504,7 +504,7 @@ public sealed class GameWindow : IDisposable
         _computeBuffer.Reset(CommandBufferResetFlags.ReleaseResourcesBit);
         using (var recording = _computeBuffer.Begin(CommandBufferUsageFlags.SimultaneousUseBit))
         {
-            ComputeScheduler.Instance.RecordAll(recording);
+           await ComputeScheduler.Instance.RecordAll(recording);
         }
         
         _computeFence.Reset();

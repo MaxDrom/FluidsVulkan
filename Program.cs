@@ -31,6 +31,7 @@ internal class Program
             .CurrencyDecimalDigits = 28;
 
         var windowOptions = WindowOptions.DefaultVulkan;
+        windowOptions.WindowState = WindowState.Maximized;
         var window = Window.Create(windowOptions);
         //
         var numberOfParticles = 256*1024;

@@ -27,11 +27,11 @@ public class ComputeScheduler
         _dependencyGraphBuilder.AddTask(task);
     }
 
-    public void RecordAll(VkCommandRecordingScope recordingScope)
+    public async Task RecordAll(VkCommandRecordingScope recordingScope)
     {
         var (tasks, edges) = _dependencyGraphBuilder.Build();
-        var topologicalSortOrder = GraphUtils.TopologicalSort(tasks,
-            (task) => edges[task].Select(z => z.To));
+        var topologicalSortOrder = await Task.Run(()=>GraphUtils.TopologicalSort(tasks,
+            (task) => edges[task].Select(z => z.To)));
 
         new ComputeRecorder().Record(recordingScope,
             topologicalSortOrder);
@@ -180,17 +180,18 @@ public class ComputeRecorder :
         return (null, imageMemoryBarrier);
     }
 
-    public void Visit(DispatchTaks taks)
+    public void Visit(DispatchTaks task)
     {
-        taks.ComputeShader.RecordDispatch(_scope, taks.NumGroupsX,
-            taks.NumGroupsY, taks.NumGroupsZ, taks.PushConstant);
+        task.ComputeShader.RecordDispatch(_scope, task.NumGroupsX,
+            task.NumGroupsY, task.NumGroupsZ, task.PushConstant,
+            task.DescriptorSet);
     }
 
     public void Visit(CopyBufferTask task)
     {
 
 
-        throw new NotImplementedException();
+        //throw new NotImplementedException();
         _scope.CopyBuffer(task.Source, task.Destination,
             task.SrcOffset, task.DstOffset,
             task.Size);
