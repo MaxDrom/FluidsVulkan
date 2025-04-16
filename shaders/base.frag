@@ -14,5 +14,6 @@ void main() {
         return;
     }
     
-    outColor = vec4(fragColor.xyz, 1);
+    
+    outColor = vec4(pow(fragColor.xyz, vec3(1/2.2)), 1);
 }
