@@ -467,7 +467,7 @@ public class ImGuiController : IDisposable
 
         using var stagingBuffer = new VkBuffer<byte>(uploadSize,
             BufferUsageFlags.TransferSrcBit,
-            SharingMode.Exclusive, _allocator);
+            SharingMode.Exclusive, _stagingAllocator);
 
         _fontTexture = new VkTexture(ImageType.Type2D,
             new Extent3D((uint)width, (uint)height, 1), 1, 1,
