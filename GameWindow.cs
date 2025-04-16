@@ -71,7 +71,6 @@ public sealed class GameWindow : IDisposable
         _stagingAllocator = stagingAllocator;
         _windowOptions = displayFormat.WindowOptions;
         _window = window;
-     
         _swapchainCtx = new VkSwapchainContext(_ctx, _device);
         _commandPool = new VkCommandPool(_ctx, _device,
             CommandPoolCreateFlags.ResetCommandBufferBit,
@@ -141,7 +140,8 @@ public sealed class GameWindow : IDisposable
                 sem.Dispose();
             foreach (var sem in _renderFinishedSemaphores)
                 sem.Dispose();
-
+            
+            _computeFence.Dispose();
             _commandPool.Dispose();
             _commandPoolTransfer.Dispose();
             _textureBufferView.Dispose();
@@ -492,13 +492,6 @@ public sealed class GameWindow : IDisposable
         }
         
         
-        // _timeFromFixedUpdate += frameTime;
-        // for (int step = 0; step<2 && _timeFromFixedUpdate >= _fixedUpdateInterval; step++)
-        // {
-        //     await _particleSystem.Update(_fixedUpdateInterval/5, _totalTime);
-        //     _timeFromFixedUpdate -= _fixedUpdateInterval;
-        // }
-        //
         if(OnUpdateAsync!=null)
             await OnUpdateAsync!.Invoke(frameTime, _totalTime);
         _computeBuffer.Reset(CommandBufferResetFlags.ReleaseResourcesBit);

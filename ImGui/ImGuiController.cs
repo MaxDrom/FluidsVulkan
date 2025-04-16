@@ -457,6 +457,7 @@ public class ImGuiController : IDisposable
 
     private unsafe void UploadFonts()
     {
+        ImGui.GetIO().Fonts.AddFontDefault();
         ImGui.GetIO().Fonts
             .GetTexDataAsRGBA32(out byte* pFonts, out var width,
                 out var height);

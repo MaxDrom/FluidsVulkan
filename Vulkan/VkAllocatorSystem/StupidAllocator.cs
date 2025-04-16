@@ -11,6 +11,7 @@ public class StupidAllocator : VkAllocator
 
     private readonly List<int> _memoryTypesIndices;
     private readonly RwLock _rwlock = new();
+    private MemoryPropertyFlags _requirredFlags;
 
     public StupidAllocator(VkContext ctx,
         VkDevice device,
@@ -18,6 +19,7 @@ public class StupidAllocator : VkAllocator
         MemoryHeapFlags preferredFlags) : base(ctx, device,
         requiredProperties, preferredFlags)
     {
+        _requirredFlags = requiredProperties;
         Ctx.Api.GetPhysicalDeviceMemoryProperties(
             Device.PhysicalDevice, out _memoryProperties);
         Dictionary<int, int> memoryTypesScores = [];
@@ -77,7 +79,7 @@ public class StupidAllocator : VkAllocator
         }
 
         if (!success)
-            throw new Exception("Failed to allocate memory");
+            throw new Exception($"Failed to allocate memory with properties {_requirredFlags}");
 
         var result = new AllocationNode(deviceMemory, 0);
         using (var writeLock = _rwlock.WriteLock())

@@ -1,5 +1,7 @@
 ﻿using System.Globalization;
 using Autofac;
+using Autofac.Features.AttributeFilters;
+using Autofac.Integration.Mef;
 using FluidsVulkan.FluidGPU;
 using FluidsVulkan.ImGui;
 using FluidsVulkan.VkAllocatorSystem;
@@ -60,13 +62,13 @@ internal class Program
         InitVulkan(builder, window, windowOptions);
         
         builder.RegisterType<FluidEngineGpu>().As<IParticleSystem>().As<IParametrized>()
-            .WithParameter("initialData", instances).SingleInstance();
-        builder.RegisterType<FluidView>().AsSelf().As<IParametrized>().SingleInstance();
-        builder.RegisterType<FluidController>().AsSelf()
+            .WithParameter("initialData", instances).WithAttributeFiltering().SingleInstance();
+        builder.RegisterType<FluidView>().AsSelf().As<IParametrized>().WithAttributeFiltering().SingleInstance();
+        builder.RegisterType<FluidController>().AsSelf().WithAttributeFiltering()
             .SingleInstance();
-        builder.RegisterType<EventHandler>().AsSelf().SingleInstance();
-        builder.RegisterType<ImGuiController>().AsSelf().SingleInstance();
-        builder.RegisterType<Editor>().As<IEditorComponent>();
+        builder.RegisterType<EventHandler>().WithAttributeFiltering().AsSelf().SingleInstance();
+        builder.RegisterType<ImGuiController>().WithAttributeFiltering().AsSelf().SingleInstance();
+        builder.RegisterType<Editor>().WithAttributeFiltering().As<IEditorComponent>();
         var container = builder.Build();
         var gameWindow = container.Resolve<GameWindow>();
         _ = container.Resolve<FluidView>();
@@ -159,24 +161,21 @@ internal class Program
        
 
         builder.RegisterType<StupidAllocator>().As<VkAllocator>()
+            .WithMetadata("Type", "DeviceLocal")
             .WithParameter("requiredProperties",
                 MemoryPropertyFlags.None)
             .WithParameter("preferredFlags",
-                MemoryHeapFlags.DeviceLocalBit)
-            .WithMetadata("Type", "DeviceLocal")
-            .SingleInstance();
-
-
+                MemoryHeapFlags.DeviceLocalBit).SingleInstance();
+        
         builder.RegisterType<StupidAllocator>().As<VkAllocator>()
+            .WithMetadata("Type", "HostVisible")
             .WithParameter("requiredProperties",
                 MemoryPropertyFlags.HostVisibleBit |
                 MemoryPropertyFlags.HostCoherentBit)
             .WithParameter("preferredFlags",
-                MemoryHeapFlags.None)
-            .WithMetadata("Type", "HostVisible")
-            .SingleInstance();
+                MemoryHeapFlags.None).SingleInstance();
+        builder.RegisterMetadataRegistrationSources();
 
-
-        builder.RegisterType<GameWindow>().AsSelf().SingleInstance();
+        builder.RegisterType<GameWindow>().WithAttributeFiltering().AsSelf().SingleInstance();
     }
 }
