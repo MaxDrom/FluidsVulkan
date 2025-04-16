@@ -228,9 +228,6 @@ public sealed class FluidView : IDisposable, IParametrized
             BufferUsageFlags.TransferDstBit,
             SharingMode.Exclusive,
             _allocator);
-
-        //_instanceBuffer = _fluidEngine.Buffer;
-        //Update(1 / 240.0, 0).GetAwaiter().GetResult();
     }
 
     public void RecordDraw(
