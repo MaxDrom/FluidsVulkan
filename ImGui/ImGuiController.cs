@@ -459,6 +459,7 @@ public class ImGuiController : IDisposable
     {
         ImGui.GetIO().Fonts.AddFontFromFileTTF("ImGui/JetBrainsMonoNerdFont-Regular.ttf",  18.0f,
             null, ImGui.GetIO().Fonts.GetGlyphRangesCyrillic());
+        ImGui.GetIO().Fonts.Build();
         ImGui.GetIO().Fonts
             .GetTexDataAsRGBA32(out byte* pFonts, out var width,
                 out var height);
