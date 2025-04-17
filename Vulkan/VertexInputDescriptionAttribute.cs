@@ -2,7 +2,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using Silk.NET.Vulkan;
 
-namespace FluidsVulkan;
+namespace FluidsVulkan.Vulkan;
 
 public interface IVertexData<TSelf>
     where TSelf : unmanaged, IVertexData<TSelf>

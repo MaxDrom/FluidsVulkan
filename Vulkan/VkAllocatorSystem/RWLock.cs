@@ -1,4 +1,4 @@
-namespace FluidsVulkan.VkAllocatorSystem;
+namespace FluidsVulkan.Vulkan.VkAllocatorSystem;
 
 internal class RwLock : IDisposable
 {

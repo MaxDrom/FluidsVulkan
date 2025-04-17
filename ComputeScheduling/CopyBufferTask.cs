@@ -1,10 +1,12 @@
 using FluidsVulkan.ComputeSchduling;
+using FluidsVulkan.ComputeScheduling.Executors;
+using FluidsVulkan.Vulkan;
 using Silk.NET.Vulkan;
 using YamlDotNet.Core.Tokens;
 
 namespace FluidsVulkan.ComputeScheduling;
 
-public class CopyBufferTask(IVkBuffer source,
+public struct CopyBufferTask(IVkBuffer source,
     IVkBuffer destination,
     ulong size,
     ulong srcOffset = 0,
@@ -16,29 +18,28 @@ public class CopyBufferTask(IVkBuffer source,
     {
         AccessFlags = AccessFlags.TransferReadBit, Buffer = source
     };
+
     private BufferResource _destination = new()
     {
-        AccessFlags = AccessFlags.TransferWriteBit, Buffer = destination
+        AccessFlags = AccessFlags.TransferWriteBit,
+        Buffer = destination
     };
+    
+    public ulong Size { get; } = size;
 
-    public IVkBuffer Source => _source.Buffer;
-    public IVkBuffer Destination => _destination.Buffer;
-    public ulong Size { get; private set; } = size;
-
-    public ulong SrcOffset { get; private set; } = srcOffset;
-    public ulong DstOffset { get; private set; } = dstOffset;
+    public ulong SrcOffset { get; } = srcOffset;
+    public ulong DstOffset { get; } = dstOffset;
 
     public List<IComputeResource> Reads => [_source];
     public List<IComputeResource> Writes => [_destination];
 
-    public void Accept(IComputeTaskVisitor visitor)
+    public PipelineStageFlags InvokeRecord(
+        VkCommandRecordingScope scope)
     {
-        visitor.Visit(this);
-    }
+        scope.CopyBuffer(_source.Buffer, _destination.Buffer,
+            SrcOffset, DstOffset, Size);
 
-    public T Accept<T>(IComputeTaskVisitor<T> visitor)
-    {
-        return visitor.Visit(this);
+        return PipelineStageFlags.TransferBit;
     }
 
     public PipelineStageFlags PipelineStage =>

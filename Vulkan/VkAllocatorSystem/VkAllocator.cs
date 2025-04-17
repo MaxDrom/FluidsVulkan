@@ -1,6 +1,6 @@
 using Silk.NET.Vulkan;
 
-namespace FluidsVulkan.VkAllocatorSystem;
+namespace FluidsVulkan.Vulkan.VkAllocatorSystem;
 
 public class AllocationNode(DeviceMemory deviceMemory, ulong offset)
 {

@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using Silk.NET.Vulkan;
 
-namespace FluidsVulkan.Builders;
+namespace FluidsVulkan.Vulkan.Builders;
 
 public sealed class GraphicsPipelineBuilder
 {

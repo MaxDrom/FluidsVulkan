@@ -5,7 +5,7 @@ using Silk.NET.Vulkan.Extensions.EXT;
 using Silk.NET.Vulkan.Extensions.KHR;
 using Silk.NET.Windowing;
 
-namespace FluidsVulkan;
+namespace FluidsVulkan.Vulkan;
 
 public class VkContext : IDisposable
 {

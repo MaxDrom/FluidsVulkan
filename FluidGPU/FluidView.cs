@@ -1,10 +1,11 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Autofac.Features.AttributeFilters;
-using FluidsVulkan.Builders;
 using FluidsVulkan.ComputeScheduling;
 using FluidsVulkan.ImGui;
-using FluidsVulkan.VkAllocatorSystem;
+using FluidsVulkan.Vulkan;
+using FluidsVulkan.Vulkan.Builders;
+using FluidsVulkan.Vulkan.VkAllocatorSystem;
 using ImGuiNET;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;

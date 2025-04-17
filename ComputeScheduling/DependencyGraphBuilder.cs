@@ -1,77 +1,63 @@
-namespace FluidsVulkan.ComputeSchduling;
+using FluidsVulkan.ComputeSchduling;
 
-public class DependencyEdge
-{
-    public IComputeTask From { get; set; }
-    public IComputeTask To { get; set; }
-}
+namespace FluidsVulkan.ComputeScheduling;
 
 public class DependencyGraphBuilder
 {
-    private readonly List<IComputeTask> _tasks = [];
+    private readonly Dictionary<IComputeTask, int> _taskIds = new();
+
+
+    public List<IComputeTask> Tasks { get; } = [];
 
     public void AddTask(IComputeTask task)
     {
-        _tasks.Add(task);
+        Tasks.Add(task);
+        _taskIds[task] = Tasks.Count - 1;
     }
-
-    public (List<IComputeTask>,
-        Dictionary<IComputeTask, List<DependencyEdge>>) Build()
+    
+    public IEnumerable<IComputeTask> GetNeighbours(IComputeTask task)
     {
-        var edges =
-            new Dictionary<IComputeTask, List<DependencyEdge>>();
-        foreach (var task in _tasks)
-            edges[task] = new List<DependencyEdge>();
-        for (var i = 0; i < _tasks.Count-1; i++)
-        for (var j = i + 1; j < _tasks.Count; j++)
+        var i = _taskIds[task];
+        
+        for (var j = i + 1; j < Tasks.Count; j++)
         {
-            var edge = FindOverlap(_tasks[i], _tasks[j]);
-            if (edge != null)
-                edges[_tasks[i]].Add(edge);
+            if (FindOverlap(Tasks[i], Tasks[j]))
+                yield return Tasks[j];
         }
-
-        return (_tasks, edges);
     }
 
-    private DependencyEdge FindOverlap(
+    private bool FindOverlap(
         IComputeTask task1,
         IComputeTask task2)
     {
         foreach (var resourceRead in task1.Reads)
-        {
-            foreach (var resourceWrite in task2.Writes)
+        foreach (var resourceWrite in task2.Writes)
+            if (resourceRead.IsOverlap(resourceWrite))
             {
-                if (resourceRead.IsOverlap(resourceWrite))
-                    return new DependencyEdge()
-                        { From = task1, To = task2 };
+                return true;
             }
-        }
+
 
         foreach (var resourceRead in task1.Writes)
-        {
-            foreach (var resourceWrite in task2.Reads)
+        foreach (var resourceWrite in task2.Reads)
+            if (resourceRead.IsOverlap(resourceWrite))
             {
-                if (resourceRead.IsOverlap(resourceWrite))
-                    return new DependencyEdge()
-                        { From = task1, To = task2 };
+                return true;
             }
-        }
+
 
         foreach (var resourceRead in task1.Writes)
-        {
-            foreach (var resourceWrite in task2.Writes)
+        foreach (var resourceWrite in task2.Writes)
+            if (resourceRead.IsOverlap(resourceWrite))
             {
-                if (resourceRead.IsOverlap(resourceWrite))
-                    return new DependencyEdge()
-                        { From = task1, To = task2 };
+                return true;
             }
-        }
-
-        return null;
+        
+        return false;
     }
 
     public void Clear()
     {
-        _tasks.Clear();
+        Tasks.Clear();
     }
 }

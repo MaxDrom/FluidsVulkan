@@ -1,4 +1,5 @@
 using FluidsVulkan.FluidGPU;
+using FluidsVulkan.Vulkan;
 
 namespace FluidsVulkan;
 

@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 
-namespace FluidsVulkan;
+namespace FluidsVulkan.Vulkan;
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 internal struct Vertex : IVertexData<Vertex>

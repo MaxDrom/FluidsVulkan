@@ -1,4 +1,4 @@
-namespace FluidsVulkan.Builders;
+namespace FluidsVulkan.Vulkan.Builders;
 
 public class DescriptorPoolBuilder
 {

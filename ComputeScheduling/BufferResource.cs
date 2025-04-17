@@ -1,11 +1,12 @@
+using FluidsVulkan.Vulkan;
 using Silk.NET.Vulkan;
 
 namespace FluidsVulkan.ComputeSchduling;
 
 public class BufferResource : IComputeResource
 {
-    public IVkBuffer Buffer { get; set; }
-    public AccessFlags AccessFlags { get; set; }
+    public IVkBuffer Buffer { get; init; }
+    public AccessFlags AccessFlags { get; init; }
     public bool IsOverlap(IComputeResource other)
     {
         if (other is BufferResource otherBufferResource)
@@ -18,7 +19,7 @@ public class BufferResource : IComputeResource
         return visitor.Visit(this);
     }
 
-    protected bool Equals(BufferResource other)
+    private bool Equals(BufferResource other)
     {
         return Buffer.Equals(other.Buffer);
     }

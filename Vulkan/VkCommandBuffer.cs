@@ -1,12 +1,20 @@
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Silk.NET.Vulkan;
 using Buffer = Silk.NET.Vulkan.Buffer;
 using Semaphore = Silk.NET.Vulkan.Semaphore;
 
-namespace FluidsVulkan;
+namespace FluidsVulkan.Vulkan;
 
 using Buffer = Buffer;
+
+public struct VkImageMemoryBarrier
+{
+    public AccessFlags SrcAccessMask;
+    public AccessFlags DstAccessMask;
+    public ImageLayout NewLayout;
+    public VkImage Image;
+    public ImageSubresourceRange SubresourceRange;
+}
 
 public class VkCommandBuffer(VkContext ctx,
     VkDevice device,
@@ -23,7 +31,6 @@ public class VkCommandBuffer(VkContext ctx,
         CommandBufferUsageFlags flags,
         CommandBufferInheritanceInfo inheritanceInfo = default)
     {
-        
         unsafe
         {
             CommandBufferBeginInfo beginInfo = new()
@@ -99,7 +106,7 @@ public class VkCommandRecordingScope : IDisposable
     private readonly VkContext _ctx;
     public Dictionary<IVkBuffer, AccessFlags> BuffersScope = new();
     public Dictionary<VkImageView, AccessFlags> ImageScope = new();
-    
+
     public VkCommandRecordingScope(VkContext ctx,
         VkCommandBuffer buffer)
     {
@@ -128,7 +135,7 @@ public class VkCommandRecordingScope : IDisposable
                 PClearValues = &clearValue,
                 RenderArea = renderArea,
                 Framebuffer = framebuffer.Framebuffer,
-                RenderPass = renderPass.RenderPass,
+                RenderPass = renderPass.RenderPass
             };
             _ctx.Api.CmdBeginRenderPass(_buffer.Buffer,
                 in renderPassInfo, SubpassContents.Inline);
@@ -154,7 +161,7 @@ public class VkCommandRecordingScope : IDisposable
         _ctx.Api.CmdCopyBuffer(_buffer.Buffer, src.Buffer,
             dst.Buffer, 1, in region);
     }
-    
+
     public void CopyBuffer(IVkBuffer src,
         IVkBuffer dst,
         ulong srcOffset,
@@ -198,15 +205,38 @@ public class VkCommandRecordingScope : IDisposable
         ReadOnlySpan<MemoryBarrier> memoryBarriers = default,
         ReadOnlySpan<BufferMemoryBarrier> bufferMemoryBarriers =
             default,
-        ReadOnlySpan<ImageMemoryBarrier> imageMemoryBarriers =
+        ReadOnlySpan<VkImageMemoryBarrier> imageMemoryBarriers =
             default)
     {
+        Span<ImageMemoryBarrier> trueMemoryBarriers = stackalloc ImageMemoryBarrier[imageMemoryBarriers.Length];
+        for(var i = 0; i < imageMemoryBarriers.Length; i++)
+        {
+            var imageBarrier = imageMemoryBarriers[i];
+                trueMemoryBarriers[i] = new ImageMemoryBarrier()
+                {
+                    SType = StructureType.ImageMemoryBarrier,
+                    DstAccessMask = imageBarrier.DstAccessMask,
+                    SrcAccessMask = imageBarrier.SrcAccessMask,
+                    SubresourceRange = imageBarrier.SubresourceRange,
+                    Image = imageBarrier.Image.Image,
+                    OldLayout = imageBarrier.Image.LastLayout,
+                    NewLayout = imageBarrier.NewLayout
+                };
+        }
+
+        foreach (var imageBarrier in imageMemoryBarriers)
+        {
+            imageBarrier.Image.LastLayout =
+                imageBarrier.NewLayout;
+        }
+
+
         _ctx.Api.CmdPipelineBarrier(
             _buffer.Buffer, srcStageFlags,
             dstStageFlags, dependencyFlags,
             memoryBarriers,
             bufferMemoryBarriers,
-            imageMemoryBarriers);
+             trueMemoryBarriers);
     }
 
     public void BindIndexBuffer(IVkBuffer buffer,
@@ -255,6 +285,16 @@ public class VkCommandRecordingScope : IDisposable
         _ctx.Api.CmdDispatch(_buffer.Buffer, groupCountX, groupCountY,
             groupCountZ);
     }
+
+    public void CopyBufferToImage(IVkBuffer buffer,
+        VkImage image,
+        ReadOnlySpan<BufferImageCopy> regions)
+    {
+        _ctx.Api.CmdCopyBufferToImage(_buffer.Buffer, buffer.Buffer,
+            image.Image,
+            ImageLayout.TransferDstOptimal, regions);
+        image.LastLayout = ImageLayout.TransferDstOptimal;
+    }
 }
 
 public class VkCommandRecordingRenderObject(VkContext ctx,
@@ -288,7 +328,8 @@ public class VkCommandRecordingRenderObject(VkContext ctx,
         uint vertexOffset = 0)
     {
         ctx.Api.CmdDrawIndexed(buffer.Buffer, indexCount,
-            instanceCount, firstIndex, (int)vertexOffset, firstInstance);
+            instanceCount, firstIndex, (int)vertexOffset,
+            firstInstance);
     }
 
     public void SetScissor(ref Rect2D scissor)

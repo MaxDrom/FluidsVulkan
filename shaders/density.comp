@@ -72,7 +72,6 @@ void main()
             ivec2 previos_cell_coords = getTexCoords(previos_cell);
             uint end_ind = min(imageLoad(prefixSum, cell).r, start_ind + maxSteps);
             
-            //debugPrintfEXT("%i %i %i %i", cell.x, cell.y, previos_cell_coords.x, previos_cell_coords.y);
             for (uint i = start_ind; i< end_ind; i++)
             {
                 Boid neign = boids_in[i];
@@ -87,10 +86,7 @@ void main()
             }
         }
     }
-    //debugPrintfEXT("%f",density);
     boids_in[id].density = density;
-
-    
 }
 
 

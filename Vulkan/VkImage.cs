@@ -1,10 +1,12 @@
-using FluidsVulkan.VkAllocatorSystem;
+using FluidsVulkan.Vulkan.VkAllocatorSystem;
 using Silk.NET.Vulkan;
 
-namespace FluidsVulkan;
+namespace FluidsVulkan.Vulkan;
+
 
 public class VkImage
 {
+    public ImageLayout LastLayout { get; internal set; }
     public VkImage(Image image, Format format, ImageType type)
     {
         Image = image;
@@ -26,7 +28,8 @@ public class VkTexture : IDisposable
     private readonly VkDevice _device;
     private readonly AllocationNode _node;
     private bool _disposedValue;
-
+    
+    
     public unsafe VkTexture(ImageType imageType,
         Extent3D extent,
         uint mipLevels,
@@ -39,6 +42,7 @@ public class VkTexture : IDisposable
         SharingMode sharingMode,
         VkAllocator allocator)
     {
+        //LastLayout = initialLayout;
         _allocator = allocator;
         _ctx = allocator.Ctx;
         _device = allocator.Device;
@@ -62,6 +66,7 @@ public class VkTexture : IDisposable
             throw new Exception("Failed to create texture");
 
         Image = new VkImage(imageUnmanaged, format, imageType);
+        Image.LastLayout = initialLayout;
         _ctx.Api.GetImageMemoryRequirements(_device.Device,
             imageUnmanaged, out var reqs);
         _node = allocator.Allocate(reqs);

@@ -2,7 +2,7 @@ using System.Collections;
 using System.Runtime.InteropServices;
 using Silk.NET.Vulkan;
 
-namespace FluidsVulkan;
+namespace FluidsVulkan.Vulkan;
 
 public sealed unsafe class VkMappedMemory<T> : IDisposable, IEnumerable<T>
     where T : unmanaged

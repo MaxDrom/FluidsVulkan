@@ -1,24 +1,33 @@
 using FluidsVulkan.ComputeSchduling;
+using FluidsVulkan.Vulkan;
+using FluidsVulkan.Vulkan.VkAllocatorSystem;
 using Silk.NET.Vulkan;
 
 namespace FluidsVulkan.ComputeScheduling;
 
 public class ComputeScheduler
 {
+    private static readonly Lock SyncRoot = new();
     private static ComputeScheduler _instance;
 
     public static ComputeScheduler Instance
     {
         get
         {
-            if (_instance == null)
+            if (_instance != null)
+                return _instance;
+            lock (SyncRoot)
+            {
                 _instance = new ComputeScheduler();
+            }
+
             return _instance;
         }
     }
 
     private DependencyGraphBuilder _dependencyGraphBuilder =
         new DependencyGraphBuilder();
+
 
     private ComputeRecorder _computeRecorder = new ComputeRecorder();
 
@@ -27,24 +36,23 @@ public class ComputeScheduler
         _dependencyGraphBuilder.AddTask(task);
     }
 
-    public async Task RecordAll(VkCommandRecordingScope recordingScope)
+    public async Task RecordAll(
+        VkCommandRecordingScope recordingScope)
     {
-        var (tasks, edges) = _dependencyGraphBuilder.Build();
-        var topologicalSortOrder = await Task.Run(()=>GraphUtils.TopologicalSort(tasks,
-            (task) => edges[task].Select(z => z.To)));
+        var topologicalSortOrder = await Task.Run(() =>
+            GraphUtils.TopologicalSort(_dependencyGraphBuilder.Tasks,
+                _dependencyGraphBuilder.GetNeighbours));
 
         _computeRecorder.Record(recordingScope,
             topologicalSortOrder);
         _dependencyGraphBuilder.Clear();
-        //return Task.CompletedTask;
     }
 }
 
 public class ComputeRecorder :
-    IComputeResourceVisitor<(BufferMemoryBarrier?, ImageMemoryBarrier?
-        )>, IComputeTaskVisitor
+    IComputeResourceVisitor<(BufferMemoryBarrier?,
+        VkImageMemoryBarrier?)>
 {
-    private VkCommandRecordingScope _scope;
 
     private Dictionary<IVkBuffer, AccessFlags>
         _bufferAccessFlags = [];
@@ -62,20 +70,24 @@ public class ComputeRecorder :
         _pipelineStage = PipelineStageFlags.TopOfPipeBit;
         _bufferAccessFlags.Clear();
         _imageAccessFlags.Clear();
-        _scope = scope;
-
+        //_scope = scope;
+        var bufferBarriers = new List<BufferMemoryBarrier>();
+        var imageBarriers = new List<VkImageMemoryBarrier>();
+        var hashset = new HashSet<IComputeResource>();
         foreach (var task in tasks)
         {
-            var bufferBarriers = new List<BufferMemoryBarrier>();
-            var imageBarriers = new List<ImageMemoryBarrier>();
-            var hashset = new HashSet<IComputeResource>();
+            bufferBarriers.Clear();
+            imageBarriers.Clear();
+            hashset.Clear();
+            imageBarriers.Capacity = bufferBarriers.Capacity =
+                task.Reads.Count + task.Writes.Count;
 
             foreach (var resource in task.Reads)
                 hashset.Add(resource);
 
             foreach (var resource in task.Writes)
                 hashset.Add(resource);
-            
+
             foreach (var resource in hashset)
             {
                 var (bufferMemoryBarrier, imageBarrier) =
@@ -88,7 +100,7 @@ public class ComputeRecorder :
             }
 
             if (bufferBarriers.Count > 0 || imageBarriers.Count > 0 ||
-                task.PipelineStage != _pipelineStage )
+                task.PipelineStage != _pipelineStage)
             {
                 scope.PipelineBarrier(_pipelineStage,
                     task.PipelineStage,
@@ -97,15 +109,11 @@ public class ComputeRecorder :
                     imageMemoryBarriers: [.. imageBarriers]);
             }
 
-         
-
-            task.Accept(this);
-
-            _pipelineStage = task.PipelineStage;
+            _pipelineStage = task.InvokeRecord(scope);
         }
     }
 
-    public (BufferMemoryBarrier?, ImageMemoryBarrier?) Visit(
+    public (BufferMemoryBarrier?, VkImageMemoryBarrier?) Visit(
         BufferResource resource)
     {
         var buffer = resource.Buffer;
@@ -137,16 +145,16 @@ public class ComputeRecorder :
         return (bufferMemoryBarrier, null);
     }
 
-    public (BufferMemoryBarrier?, ImageMemoryBarrier?) Visit(
+    public (BufferMemoryBarrier?, VkImageMemoryBarrier?) Visit(
         ImageResource resource)
     {
         var image = resource.Image;
         if (!_imageAccessFlags.TryGetValue(image,
                 out var val))
         {
-            _imageAccessFlags[image] = (resource.AccessFlags,
-                resource.Layout);
-            return (null, null);
+            _imageAccessFlags[image] = (AccessFlags.None,
+                image.LastLayout);
+            val = _imageAccessFlags[image];
         }
 
         var (srcAccessFlags, srcLayout) = val;
@@ -154,41 +162,22 @@ public class ComputeRecorder :
             resource.AccessFlags == AccessFlags.ShaderReadBit &&
             srcLayout == resource.Layout)
             return (null, null);
-        var imageMemoryBarrier = new ImageMemoryBarrier()
+        var imageMemoryBarrier = new VkImageMemoryBarrier()
         {
-            Image = image.Image,
+            Image = image,
             DstAccessMask = resource.AccessFlags,
             SrcAccessMask =
                 _pipelineStage == PipelineStageFlags.TopOfPipeBit
                     ? AccessFlags.None
                     : srcAccessFlags,
-            OldLayout = srcLayout,
             NewLayout = resource.Layout,
-            SType = StructureType.ImageMemoryBarrier,
             SubresourceRange = new ImageSubresourceRange(
                 ImageAspectFlags.ColorBit,
                 0, 1, 0, 1)
         };
+
         _imageAccessFlags[image] =
             (resource.AccessFlags, resource.Layout);
         return (null, imageMemoryBarrier);
-    }
-
-    public void Visit(DispatchTaks task)
-    {
-        task.ComputeShader.RecordDispatch(_scope, task.NumGroupsX,
-            task.NumGroupsY, task.NumGroupsZ, task.PushConstant,
-            task.DescriptorSet);
-    }
-
-    public void Visit(CopyBufferTask task)
-    {
-
-
-        //throw new NotImplementedException();
-        _scope.CopyBuffer(task.Source, task.Destination,
-            task.SrcOffset, task.DstOffset,
-            task.Size);
-        
     }
 }

@@ -1,4 +1,5 @@
 using FluidsVulkan.ComputeScheduling;
+using FluidsVulkan.Vulkan;
 using Silk.NET.Vulkan;
 
 namespace FluidsVulkan.ComputeSchduling;
@@ -8,21 +9,7 @@ public interface IComputeTask
     List<IComputeResource> Reads { get; }
     List<IComputeResource> Writes { get; }
     
-    void Accept(IComputeTaskVisitor visitor);
-
-    T Accept<T>(IComputeTaskVisitor<T> visitor);
+    PipelineStageFlags InvokeRecord(VkCommandRecordingScope scope);
     
     PipelineStageFlags PipelineStage { get; }
-}
-
-public interface IComputeTaskVisitor
-{
-    void Visit(DispatchTaks task);
-    void Visit(CopyBufferTask resource);
-}
-
-public interface IComputeTaskVisitor<out T>
-{
-    T Visit(DispatchTaks resource);
-    T Visit(CopyBufferTask resource);
 }

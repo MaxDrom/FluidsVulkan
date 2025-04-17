@@ -1,8 +1,10 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Autofac.Features.AttributeFilters;
-using FluidsVulkan.Builders;
-using FluidsVulkan.VkAllocatorSystem;
+using FluidsVulkan.ComputeScheduling;
+using FluidsVulkan.Vulkan;
+using FluidsVulkan.Vulkan.Builders;
+using FluidsVulkan.Vulkan.VkAllocatorSystem;
 using ImGuiNET;
 using Silk.NET.Input;
 using Silk.NET.Maths;
@@ -382,11 +384,36 @@ public class ImGuiController : IDisposable
             MinDepth = 0.0f,
             MaxDepth = 1.0f
         };
+        recording.PipelineBarrier(
+            PipelineStageFlags.TopOfPipeBit,
+            PipelineStageFlags.FragmentShaderBit,
+            DependencyFlags.None,
+            imageMemoryBarriers:
+            [
+                new VkImageMemoryBarrier()
+                {
+                    DstAccessMask = AccessFlags.ShaderReadBit,
+                    Image = _fontTexture.Image,
+                    NewLayout = ImageLayout.General,
+                    SrcAccessMask = AccessFlags.None,
+                    SubresourceRange = new ImageSubresourceRange()
+                    {
+                        AspectMask = ImageAspectFlags.ColorBit,
+                        BaseArrayLayer =  0,
+                        BaseMipLevel = 0,
+                        LevelCount = 1,
+                        LayerCount = 1
+                    }
+                }
+            ]);
         using (var pass =
                recording.BeginRenderPass(_renderPass, _framebuffer,
                    renderArea))
         {
             recording.BindPipeline(_pipeline);
+            if (_fontTexture.Image
+                    .LastLayout != ImageLayout.General)
+
             pass.SetViewport(ref viewport);
             recording.BindVertexBuffers(0, [_vertexBuffer], [0]);
             recording.BindIndexBuffer(_indexBuffer, 0,
@@ -457,15 +484,15 @@ public class ImGuiController : IDisposable
 
     private unsafe void UploadFonts()
     {
-        ImGui.GetIO().Fonts.AddFontFromFileTTF("ImGui/JetBrainsMonoNerdFont-Regular.ttf",  18.0f,
+        ImGui.GetIO().Fonts.AddFontFromFileTTF(
+            "ImGui/JetBrainsMonoNerdFont-Regular.ttf", 18.0f,
             null, ImGui.GetIO().Fonts.GetGlyphRangesCyrillic());
         ImGui.GetIO().Fonts.Build();
         ImGui.GetIO().Fonts
             .GetTexDataAsRGBA32(out byte* pFonts, out var width,
                 out var height);
         ulong uploadSize = (ulong)(width * height * 4);
-
-        using var stagingBuffer = new VkBuffer<byte>(uploadSize,
+        var stagingBuffer = new VkBuffer<byte>(uploadSize,
             BufferUsageFlags.TransferSrcBit,
             SharingMode.Exclusive, _stagingAllocator);
 
@@ -490,71 +517,25 @@ public class ImGuiController : IDisposable
             }
         }
 
-        using (var recording =
-               copyBuffer.Begin(CommandBufferUsageFlags
-                   .OneTimeSubmitBit))
+        var region = new BufferImageCopy()
         {
-            recording.PipelineBarrier(PipelineStageFlags.TopOfPipeBit,
-                PipelineStageFlags.TransferBit, DependencyFlags.None,
-                imageMemoryBarriers:
-                [
-                    new ImageMemoryBarrier()
-                    {
-                        SType = StructureType.ImageMemoryBarrier,
-                        DstAccessMask = AccessFlags.TransferWriteBit,
-                        SrcAccessMask = AccessFlags.None,
-                        Image = _fontTexture.Image.Image,
-                        NewLayout = ImageLayout.TransferDstOptimal,
-                        OldLayout = ImageLayout.Undefined,
-                        SubresourceRange =
-                            new ImageSubresourceRange(
-                                ImageAspectFlags.ColorBit, 0, 1, 0, 1)
-                    }
-                ]);
-            var region = new BufferImageCopy()
+            BufferImageHeight = 0,
+            BufferRowLength = 0,
+            BufferOffset = 0,
+            ImageExtent =
+                new Extent3D((uint)width, (uint)height, 1),
+            ImageOffset = new Offset3D(0, 0, 0),
+            ImageSubresource = new ImageSubresourceLayers()
             {
-                BufferImageHeight = 0,
-                BufferRowLength = 0,
-                BufferOffset = 0,
-                ImageExtent =
-                    new Extent3D((uint)width, (uint)height, 1),
-                ImageOffset = new Offset3D(0, 0, 0),
-                ImageSubresource = new ImageSubresourceLayers()
-                {
-                    AspectMask = ImageAspectFlags.ColorBit,
-                    BaseArrayLayer = 0,
-                    LayerCount = 1,
-                    MipLevel = 0
-                },
-            };
-            _ctx.Api.CmdCopyBufferToImage(copyBuffer.Buffer,
-                stagingBuffer.Buffer, _fontTexture.Image.Image,
-                ImageLayout.TransferDstOptimal,
-                1, in region);
-            recording.PipelineBarrier(PipelineStageFlags.TransferBit,
-                PipelineStageFlags.BottomOfPipeBit,
-                DependencyFlags.None,
-                imageMemoryBarriers:
-                [
-                    new ImageMemoryBarrier()
-                    {
-                        SType = StructureType.ImageMemoryBarrier,
-                        DstAccessMask = AccessFlags.None,
-                        SrcAccessMask = AccessFlags.TransferWriteBit,
-                        Image = _fontTexture.Image.Image,
-                        NewLayout = ImageLayout.General,
-                        OldLayout = ImageLayout.TransferDstOptimal,
-                        SubresourceRange =
-                            new ImageSubresourceRange(
-                                ImageAspectFlags.ColorBit, 0, 1, 0, 1)
-                    }
-                ]);
-        }
-
-        copyBuffer.Submit(_device.TransferQueue, VkFence.NullHandle,
-            [], []);
-
-        _ctx.Api.QueueWaitIdle(_device.TransferQueue);
+                AspectMask = ImageAspectFlags.ColorBit,
+                BaseArrayLayer = 0,
+                LayerCount = 1,
+                MipLevel = 0
+            },
+        };
+        ComputeScheduler.Instance.AddTask(
+            new CopyBufferToImageTask(stagingBuffer,
+                _fontTexture.Image, [region]));
     }
 
     public void Dispose()

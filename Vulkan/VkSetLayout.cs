@@ -1,7 +1,7 @@
 using System.Reflection;
 using Silk.NET.Vulkan;
 
-namespace FluidsVulkan;
+namespace FluidsVulkan.Vulkan;
 
 public interface IUniformBufferStruct
 {

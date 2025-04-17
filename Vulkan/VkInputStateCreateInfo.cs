@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using Silk.NET.Vulkan;
 
-namespace FluidsVulkan;
+namespace FluidsVulkan.Vulkan;
 
 public class VkVertexInputStateCreateInfo : IDisposable
 {

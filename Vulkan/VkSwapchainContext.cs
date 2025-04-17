@@ -2,7 +2,7 @@ using Silk.NET.Vulkan;
 using Silk.NET.Vulkan.Extensions.KHR;
 using Semaphore = Silk.NET.Vulkan.Semaphore;
 
-namespace FluidsVulkan;
+namespace FluidsVulkan.Vulkan;
 
 public unsafe class VkSwapchainContext : IDisposable
 {

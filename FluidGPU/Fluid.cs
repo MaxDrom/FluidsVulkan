@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using FluidsVulkan.Vulkan;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 

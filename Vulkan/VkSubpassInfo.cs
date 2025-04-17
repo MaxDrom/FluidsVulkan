@@ -1,6 +1,6 @@
 using Silk.NET.Vulkan;
 
-namespace FluidsVulkan;
+namespace FluidsVulkan.Vulkan;
 
 public class VkSubpassInfo(PipelineBindPoint bindPoint,
     AttachmentReference[] colorAttachmentReferences

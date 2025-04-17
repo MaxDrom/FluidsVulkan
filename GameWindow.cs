@@ -1,7 +1,8 @@
 using Autofac.Features.AttributeFilters;
 using FluidsVulkan.ComputeScheduling;
 using FluidsVulkan.FluidGPU;
-using FluidsVulkan.VkAllocatorSystem;
+using FluidsVulkan.Vulkan;
+using FluidsVulkan.Vulkan.VkAllocatorSystem;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 using Silk.NET.Windowing;
@@ -41,7 +42,6 @@ public sealed class GameWindow : IDisposable
     private List<VkImageView> _views;
     private WindowOptions _windowOptions;
     private readonly IWindow _window;
-    private readonly VkCommandPool _commandPoolTransfer;
 
     public VkImageView RenderTarget => _textureBufferView;
 
@@ -78,11 +78,6 @@ public sealed class GameWindow : IDisposable
             CommandPoolCreateFlags.ResetCommandBufferBit,
             _device.FamilyIndex);
 
-        _commandPoolTransfer = new VkCommandPool(_ctx, _device,
-            CommandPoolCreateFlags.ResetCommandBufferBit,
-            _device.FamilyIndex);
-
-
         CreateSwapchain();
         CreateRenderTarget();
         CreateViews();
@@ -90,10 +85,6 @@ public sealed class GameWindow : IDisposable
         _buffers =
             _commandPool.AllocateBuffers(CommandBufferLevel.Primary,
                 FramesInFlight);
-
-
-        //for (var i = 0; i < _views.Count; i++)
-        //  RecordBuffer(_buffers[i], i);
 
         _fences = new VkFence[FramesInFlight];
         _imageAvailableSemaphores = new VkSemaphore[FramesInFlight];
@@ -143,7 +134,6 @@ public sealed class GameWindow : IDisposable
 
             _computeFence.Dispose();
             _commandPool.Dispose();
-            _commandPoolTransfer.Dispose();
             _textureBufferView.Dispose();
             _textureBuffer.Dispose();
             _swapchain.Dispose();
@@ -217,69 +207,7 @@ public sealed class GameWindow : IDisposable
             ImageUsageFlags.TransferDstBit,
             SampleCountFlags.Count1Bit, SharingMode.Exclusive,
             _allocator);
-
-        using var stagingBuffer = new VkBuffer<byte>(
-            _textureBuffer.Size,
-            BufferUsageFlags.TransferSrcBit, SharingMode.Exclusive,
-            _stagingAllocator);
-        using (var mapped =
-               stagingBuffer.Map(0, _textureBuffer.Size))
-        {
-            for (var i = 0u; i < mapped.Length; i++) mapped[i] = 0;
-        }
-
-        var copyRegion = new BufferImageCopy
-        {
-            BufferOffset = 0,
-            BufferRowLength = 0,
-            BufferImageHeight = 0,
-            ImageSubresource =
-                new ImageSubresourceLayers
-                {
-                    AspectMask = ImageAspectFlags.ColorBit,
-                    MipLevel = 0,
-                    BaseArrayLayer = 0,
-                    LayerCount = 1,
-                },
-            ImageOffset = new Offset3D(0, 0, 0),
-            ImageExtent = _textureBuffer.Extent,
-        };
-        var copyBuffer = _commandPoolTransfer
-            .AllocateBuffers(CommandBufferLevel.Primary, 1).First();
-        using (var recording =
-               copyBuffer.Begin(CommandBufferUsageFlags
-                   .OneTimeSubmitBit))
-        {
-            var barrier = new ImageMemoryBarrier
-            {
-                SType = StructureType.ImageMemoryBarrier,
-                OldLayout = ImageLayout.Undefined,
-                NewLayout = ImageLayout.General,
-                Image = _textureBuffer.Image.Image,
-                SubresourceRange = new ImageSubresourceRange
-                {
-                    AspectMask = ImageAspectFlags.ColorBit,
-                    BaseMipLevel = 0,
-                    LevelCount = 1,
-                    BaseArrayLayer = 0,
-                    LayerCount = 1,
-                },
-                SrcAccessMask = 0,
-                DstAccessMask = AccessFlags.TransferWriteBit,
-            };
-
-            recording.PipelineBarrier(PipelineStageFlags.TopOfPipeBit,
-                PipelineStageFlags.TransferBit, DependencyFlags.None,
-                imageMemoryBarriers: [barrier]);
-
-            _ctx.Api.CmdCopyBufferToImage(copyBuffer.Buffer,
-                stagingBuffer.Buffer, _textureBuffer.Image.Image,
-                ImageLayout.General,
-                new ReadOnlySpan<BufferImageCopy>(ref copyRegion));
-        }
-
-        copyBuffer.Submit(_device.TransferQueue, VkFence.NullHandle,
-            [], []);
+       
         _ctx.Api.QueueWaitIdle(_device.TransferQueue);
 
         var mapping = new ComponentMapping
@@ -357,24 +285,19 @@ public sealed class GameWindow : IDisposable
             new ImageSubresourceRange(ImageAspectFlags.ColorBit,
                 0, 1, 0, 1);
 
-        ImageMemoryBarrier bb = new()
+        VkImageMemoryBarrier bb = new()
         {
-            SType = StructureType.ImageMemoryBarrier,
-            OldLayout = ImageLayout.Undefined,
             NewLayout = ImageLayout.General,
             SrcAccessMask = AccessFlags.None,
             DstAccessMask = AccessFlags.MemoryReadBit,
-            Image = _textureBuffer.Image.Image,
+            Image = _textureBuffer.Image,
             SubresourceRange = subresourceRange,
         };
 
         recording.PipelineBarrier(PipelineStageFlags.TopOfPipeBit,
             PipelineStageFlags.ColorAttachmentOutputBit,
             DependencyFlags.None, imageMemoryBarriers: [bb]);
-
-
-        // _view.RecordDraw(scissor, viewport,
-        //     recording);
+        
 
         OnRender?.Invoke(recording, scissor);
 
@@ -395,28 +318,24 @@ public sealed class GameWindow : IDisposable
         region.DstOffsets[1] = new((int)_swapchain.Extent.Width,
             (int)_swapchain.Extent.Height, 1);
 
-        ImageMemoryBarrier[] barriers =
+        VkImageMemoryBarrier[] barriers =
         [
             new()
             {
-                SType = StructureType.ImageMemoryBarrier,
-                OldLayout = ImageLayout.General,
                 NewLayout = ImageLayout.TransferSrcOptimal,
                 SrcAccessMask =
                     AccessFlags.ColorAttachmentWriteBit,
                 DstAccessMask = AccessFlags.TransferReadBit,
-                Image = _textureBuffer.Image.Image,
+                Image = _textureBuffer.Image,
                 SubresourceRange = subresourceRange,
             },
 
             new()
             {
-                SType = StructureType.ImageMemoryBarrier,
-                OldLayout = ImageLayout.Undefined,
                 NewLayout = ImageLayout.TransferDstOptimal,
                 SrcAccessMask = AccessFlags.None,
                 DstAccessMask = AccessFlags.TransferWriteBit,
-                Image = _swapchain.Images[imageIndex].Image,
+                Image = _swapchain.Images[imageIndex],
                 SubresourceRange = subresourceRange,
             },
         ];
@@ -432,15 +351,14 @@ public sealed class GameWindow : IDisposable
             _swapchain.Images[imageIndex].Image,
             ImageLayout.TransferDstOptimal, [region],
             Filter.Linear);
-
-        ImageMemoryBarrier barrier2 = new()
+        
+        
+        VkImageMemoryBarrier barrier2 = new()
         {
-            SType = StructureType.ImageMemoryBarrier,
-            OldLayout = ImageLayout.TransferDstOptimal,
             NewLayout = ImageLayout.PresentSrcKhr,
             SrcAccessMask = AccessFlags.TransferWriteBit,
             DstAccessMask = AccessFlags.None,
-            Image = _swapchain.Images[imageIndex].Image,
+            Image = _swapchain.Images[imageIndex],
             SubresourceRange = subresourceRange,
         };
 
@@ -466,8 +384,6 @@ public sealed class GameWindow : IDisposable
         CreateViews();
     }
 
-    static double _fixedUpdateInterval = 1 / 60.0;
-    static double _timeFromFixedUpdate = _fixedUpdateInterval;
     private VkCommandBuffer _computeBuffer;
     private VkFence _computeFence;
 
@@ -513,8 +429,14 @@ public sealed class GameWindow : IDisposable
         _totalTime += frameTime;
     }
 
+    private bool _firstRunRender = true;
     private void Render(double frameTime)
     {
+        if (_firstRunRender)
+        {
+            _firstRunRender = false;
+            return; 
+        }
         _fences[_frameIndex].WaitFor().GetAwaiter().GetResult();
         if (_swapchain.AcquireNextImage(_device,
                 _imageAvailableSemaphores[_frameIndex],

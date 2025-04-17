@@ -1,7 +1,9 @@
 using System.Runtime.InteropServices;
 using Autofac.Features.AttributeFilters;
+using FluidsVulkan.ComputeScheduling;
 using FluidsVulkan.ImGui;
-using FluidsVulkan.VkAllocatorSystem;
+using FluidsVulkan.Vulkan;
+using FluidsVulkan.Vulkan.VkAllocatorSystem;
 using ImGuiNET;
 using Silk.NET.Vulkan;
 
@@ -62,28 +64,28 @@ public class FluidEngineGpu : IParticleSystem, IParametrized
     private float _targetDensity = 0;
     private float _densityMult = 1;
     private float _perceptionRadius;
-    
-    [SliderFloat("Perception Radius", 0, 1 )]
+
+    [SliderFloat("Perception Radius", 0, 1)]
     public float PerceptionRadius
     {
-        get => _perceptionRadius*_gridSize;
-        set => _perceptionRadius = value/(float)_gridSize;
+        get => _perceptionRadius * _gridSize;
+        set => _perceptionRadius = value / (float)_gridSize;
     }
 
-    [SliderFloat("Target Density", 0, 50 )]
+    [SliderFloat("Target Density", 0, 50)]
     public float TargetDensity
     {
         get => _targetDensity;
         set => _targetDensity = value;
     }
-    
-    [SliderFloat("Density Mult", 0, 1000 )]
+
+    [SliderFloat("Density Mult", 0, 1000)]
     public float DensityMult
     {
         get => _densityMult;
         set => _densityMult = value;
     }
-    
+
     private float _viscosityMult = 300f;
 
     [SliderFloat("Viscosity", 0, 500)]
@@ -107,7 +109,7 @@ public class FluidEngineGpu : IParticleSystem, IParametrized
         _boidsCount = (uint)initialData.Length;
         _ctx = ctx;
         _device = device;
-        _perceptionRadius = 1.0f/_gridSize;
+        _perceptionRadius = 1.0f / _gridSize;
         _allocator = allocator;
         _stagingAllocator = stagingAllocator;
         _bucketSizes = new VkTexture(ImageType.Type2D,
@@ -179,7 +181,7 @@ public class FluidEngineGpu : IParticleSystem, IParametrized
             for (var i = 0; i < initialData.Length; i++)
                 mapped[i] = initialData[i];
         }
-        
+
         _copyPool = new VkCommandPool(_ctx, _device,
             CommandPoolCreateFlags.ResetCommandBufferBit,
             _device.FamilyIndex);
@@ -280,50 +282,48 @@ public class FluidEngineGpu : IParticleSystem, IParametrized
 
     public Task Update(double delta, double totalTime)
     {
-
-            _predictShader.SetPushConstant(new PredictPushConstant()
-            {
-                bufferLength = _boidsCount,
-                delta = (float)delta,
-            });
-            _predictShader.Dispatch(
-                (uint)Math.Ceiling(_boidsCount / 1024.0), 1, 1);
-
-
-            _countShader.Dispatch(
-                (uint)Math.Ceiling(_boidsCount / 1024.0), 1, 1);
+        _predictShader.SetPushConstant(new PredictPushConstant()
+        {
+            bufferLength = _boidsCount,
+            delta = (float)delta,
+        });
+        _predictShader.Dispatch(
+            (uint)Math.Ceiling(_boidsCount / 1024.0), 1, 1);
 
 
-            _prefixSumGpu.RecordBuffer(_bucketSizesView,
-                _prefixSumView, ((int)_gridSize, (int)_gridSize));
+        _countShader.Dispatch(
+            (uint)Math.Ceiling(_boidsCount / 1024.0), 1, 1);
 
 
-            _replaceShader.Dispatch(
-                (uint)Math.Ceiling(_boidsCount / 1024.0),
-                1, 1);
+        _prefixSumGpu.RecordBuffer(_bucketSizesView,
+            _prefixSumView, ((int)_gridSize, (int)_gridSize));
 
-            _densityShader.Dispatch(
-                (uint)Math.Ceiling(_boidsCount / 1024.0), 1, 1);
 
-            _updateShader.SetPushConstant(new UpdatePushConstant()
-            {
-                bufferLength = _boidsCount,
-                delta = (float)delta,
-                perceptionRadius = _perceptionRadius,
-                densityMult = _densityMult,
-                targetDensity = _targetDensity,
-                viscosityMult = _viscosityMult
-            });
-            _updateShader.Dispatch(
-                (uint)Math.Ceiling(_boidsCount / 1024.0),
-                1, 1);
-            return Task.CompletedTask;
+        _replaceShader.Dispatch(
+            (uint)Math.Ceiling(_boidsCount / 1024.0),
+            1, 1);
+
+        _densityShader.Dispatch(
+            (uint)Math.Ceiling(_boidsCount / 1024.0), 1, 1);
+
+        _updateShader.SetPushConstant(new UpdatePushConstant()
+        {
+            bufferLength = _boidsCount,
+            delta = (float)delta,
+            perceptionRadius = _perceptionRadius,
+            densityMult = _densityMult,
+            targetDensity = _targetDensity,
+            viscosityMult = _viscosityMult
+        });
+        _updateShader.Dispatch(
+            (uint)Math.Ceiling(_boidsCount / 1024.0),
+            1, 1);
+        return Task.CompletedTask;
     }
 
     private void InitTexture(VkTexture texture)
-    {
-        _cmdBufferCopy.Reset(CommandBufferResetFlags.None);
-        using var stagingBuffer = new VkBuffer<uint>(
+    { 
+        var stagingBuffer = new VkBuffer<uint>(
             (int)(texture.Extent.Width * texture.Extent.Height),
             BufferUsageFlags.TransferSrcBit, SharingMode.Exclusive,
             _stagingAllocator);
@@ -338,72 +338,28 @@ public class FluidEngineGpu : IParticleSystem, IParametrized
                 mapped[i] = 0;
         }
 
-        using (var recording =
-               _cmdBufferCopy.Begin(CommandBufferUsageFlags.None))
+
+        var region = new BufferImageCopy
         {
-            var region = new BufferImageCopy
-            {
-                BufferOffset = 0,
-                BufferRowLength = 0,
-                BufferImageHeight = 0,
-                ImageSubresource =
-                    new ImageSubresourceLayers
-                    {
-                        AspectMask =
-                            ImageAspectFlags.ColorBit,
-                        MipLevel = 0,
-                        BaseArrayLayer = 0,
-                        LayerCount = 1,
-                    },
-                ImageOffset = new Offset3D(0, 0, 0),
-                ImageExtent = texture.Extent,
-            };
+            BufferOffset = 0,
+            BufferRowLength = 0,
+            BufferImageHeight = 0,
+            ImageSubresource =
+                new ImageSubresourceLayers
+                {
+                    AspectMask =
+                        ImageAspectFlags.ColorBit,
+                    MipLevel = 0,
+                    BaseArrayLayer = 0,
+                    LayerCount = 1,
+                },
+            ImageOffset = new Offset3D(0, 0, 0),
+            ImageExtent = texture.Extent,
+        };
 
-            ImageMemoryBarrier barrier = new()
-            {
-                SType = StructureType.ImageMemoryBarrier,
-                DstAccessMask = AccessFlags.TransferWriteBit,
-                SrcAccessMask = AccessFlags.None,
-                OldLayout = ImageLayout.Undefined,
-                NewLayout = ImageLayout.TransferDstOptimal,
-                Image = texture.Image.Image,
-                SubresourceRange =
-                    new ImageSubresourceRange(
-                        ImageAspectFlags.ColorBit, 0, 1, 0, 1),
-            };
-
-            recording.PipelineBarrier(PipelineStageFlags.TopOfPipeBit,
-                PipelineStageFlags.TransferBit, 0,
-                imageMemoryBarriers: [barrier]);
-
-            _ctx.Api.CmdCopyBufferToImage(_cmdBufferCopy.Buffer,
-                stagingBuffer.Buffer,
-                texture.Image.Image,
-                ImageLayout.TransferDstOptimal, 1, in region);
-
-
-            ImageMemoryBarrier barrier1 = new()
-            {
-                SType = StructureType.ImageMemoryBarrier,
-                DstAccessMask = AccessFlags.None,
-                SrcAccessMask = AccessFlags.TransferWriteBit,
-                OldLayout = ImageLayout.TransferDstOptimal,
-                NewLayout = ImageLayout.General,
-                Image = texture.Image.Image,
-                SubresourceRange =
-                    new ImageSubresourceRange(
-                        ImageAspectFlags.ColorBit, 0, 1, 0, 1),
-            };
-
-            recording.PipelineBarrier(PipelineStageFlags.TransferBit,
-                PipelineStageFlags.BottomOfPipeBit, 0,
-                imageMemoryBarriers: [barrier1]);
-        }
-
-        _cmdBufferCopy.Submit(_device.TransferQueue,
-            VkFence.NullHandle, [], []);
-        _ctx.Api.QueueWaitIdle(_device.TransferQueue);
-        _cmdBufferCopy.Reset(CommandBufferResetFlags.None);
+        ComputeScheduler.Instance.AddTask(
+            new CopyBufferToImageTask(stagingBuffer, texture.Image,
+                [region]));
     }
 
     public void Dispose()

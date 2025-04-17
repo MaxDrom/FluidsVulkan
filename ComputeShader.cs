@@ -1,26 +1,17 @@
 using System.Runtime.InteropServices;
 using FluidsVulkan.ComputeSchduling;
 using FluidsVulkan.ComputeScheduling;
+using FluidsVulkan.ComputeScheduling.Executors;
+using FluidsVulkan.Vulkan;
 using Silk.NET.Vulkan;
 
 namespace FluidsVulkan;
-
-public interface IComputeShader
-{
-    void RecordDispatch(VkCommandRecordingScope recording,
-        uint threadGroupCountX,
-        uint threadGroupCountY,
-        uint threadGroupCountZ,
-        object pushConstantBoxed,
-        DescriptorSet descriptorsSet
-    );
-}
 
 public class ComputeShader<T>(VkContext ctx,
     VkDevice device,
     string spvPath
 )
-    : IDisposable, IComputeShader
+    : IDisposable
     where T : unmanaged
 {
     private VkDescriptorPool _descriptorPool;
@@ -29,6 +20,7 @@ public class ComputeShader<T>(VkContext ctx,
     private VkComputePipeline _computePipeline = null;
     private T _pushConstant;
     private int _currentSet;
+
     private Dictionary<int, (IVkBuffer, AccessFlags)>
         _bufferBindings =
             [];
@@ -82,7 +74,7 @@ public class ComputeShader<T>(VkContext ctx,
                 new DescriptorPoolSize()
                 {
                     Type = DescriptorType.StorageBuffer,
-                    DescriptorCount = (uint)bufferCount*1000,
+                    DescriptorCount = (uint)bufferCount * 1000,
                 });
 
         if (imagesCount > 0)
@@ -90,7 +82,7 @@ public class ComputeShader<T>(VkContext ctx,
                 new DescriptorPoolSize()
                 {
                     Type = DescriptorType.StorageImage,
-                    DescriptorCount = (uint)imagesCount*1000,
+                    DescriptorCount = (uint)imagesCount * 1000,
                 });
 
 
@@ -105,7 +97,7 @@ public class ComputeShader<T>(VkContext ctx,
         uint threadGroupCountY,
         uint threadGroupCountZ)
     {
-        if(_computePipeline == null)
+        if (_computePipeline == null)
             InitPipeline();
         var updater = new VkDescriptorSetUpdater(ctx, device);
         foreach (var (binding, (buffer, _)) in _bufferBindings)
@@ -141,7 +133,7 @@ public class ComputeShader<T>(VkContext ctx,
 
         updater.Update();
 
-       
+
         var reads = new List<IComputeResource>();
         var writes = new List<IComputeResource>();
         foreach (var (_, (buffer, accessFlags)) in _bufferBindings)
@@ -180,37 +172,24 @@ public class ComputeShader<T>(VkContext ctx,
                 });
         }
 
-        ComputeScheduler.Instance.AddTask(new DispatchTaks()
+        ComputeScheduler.Instance.AddTask(new DispatchTask()
         {
-            ComputeShader = this,
-            NumGroupsX = threadGroupCountX,
-            NumGroupsY = threadGroupCountY,
-            NumGroupsZ = threadGroupCountZ,
             Reads = reads,
             Writes = writes,
-            PushConstant = _pushConstant,
-            DescriptorSet = _descriptorSets[_currentSet],
+            Executor = new DispatchExecutor<T>()
+            {
+                PushConstant = _pushConstant,
+                DescriptorSet = _descriptorSets[_currentSet],
+                NumGroupsX = threadGroupCountX,
+                NumGroupsY = threadGroupCountY,
+                NumGroupsZ = threadGroupCountZ,
+                Pipeline = _computePipeline
+            }
         });
-        
+
         _currentSet = (++_currentSet) % 1000;
     }
 
-    public void RecordDispatch(VkCommandRecordingScope recording,
-        uint threadGroupCountX,
-        uint threadGroupCountY,
-        uint threadGroupCountZ,
-        object pushConstantBoxed,
-        DescriptorSet descriptorSet)
-    {
-        var pushConstant = (T)pushConstantBoxed;
-        recording.BindPipeline(_computePipeline);
-        recording.BindDescriptorSets(PipelineBindPoint.Compute,
-            _computePipeline!.PipelineLayout, [descriptorSet]);
-        recording.SetPushConstant(_computePipeline,
-            ShaderStageFlags.ComputeBit, ref pushConstant);
-        recording.Dispatch(threadGroupCountX, threadGroupCountY,
-            threadGroupCountZ);
-    }
 
     public void SetPushConstant(T pushConstant)
     {
