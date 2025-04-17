@@ -18,7 +18,7 @@ public class VkGraphicsPipeline : IDisposable, IVkPipeline
         PushConstantRange[] pushConstantRanges,
         VkRenderPass renderPass,
         int subpassIndex,
-        IEnumerable<DynamicState> dynamicStates,
+        DynamicState[] dynamicStates,
         VkVertexInputStateCreateInfo vertexInputStateCreateInfo,
         Viewport viewport,
         Rect2D scissor,

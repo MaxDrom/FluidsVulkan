@@ -10,7 +10,7 @@ public class EventHandler : IDisposable
     private IMouse _mouse;
     private IInputContext _inputContext;
     public IInputContext InputContext => _inputContext;
-    // Клавиши
+    
     private HashSet<Key> _prevKeys = [];
     private HashSet<Key> _currentKeys = [];
 
@@ -22,7 +22,7 @@ public class EventHandler : IDisposable
     private Vector2 _lastMousePosition;
 
     
-    private float _mouseScrollDelta = 0f;
+    private float _mouseScrollDelta;
     
     public event Action<Key> OnKeyJustPressed;
     public event Action<Key> OnKeyPressed;
@@ -41,7 +41,7 @@ public class EventHandler : IDisposable
         _mousePosition = _mouse.Position;
         _lastMousePosition = _mousePosition;
         
-        _mouse.Scroll += (mouse, scrollDelta) =>
+        _mouse.Scroll += (_, scrollDelta) =>
         {
             _mouseScrollDelta = scrollDelta.Y;
             OnMouseScrolled?.Invoke(scrollDelta.Y);
@@ -76,7 +76,7 @@ public class EventHandler : IDisposable
             }
         }
 
-        // Мышь
+        
         _prevMouseButtons = new HashSet<MouseButton>(_currentMouseButtons);
         _currentMouseButtons.Clear();
 
@@ -98,14 +98,13 @@ public class EventHandler : IDisposable
         _mousePosition = _mouse.Position;
         _mouseDelta = _mousePosition - _lastMousePosition;
 
-        // Мышь движение
+        
         if (_mousePosition != _lastMousePosition)
         {
             OnMouseMoved?.Invoke(_mousePosition);
         }
     }
-
-    // ==== Клавиши ====
+    
     public bool IsKeyHeld(Key key)
         => _currentKeys.Contains(key);
 
@@ -115,7 +114,7 @@ public class EventHandler : IDisposable
     public bool IsKeyJustReleased(Key key)
         => !_currentKeys.Contains(key) && _prevKeys.Contains(key);
 
-    // ==== Мышь ====
+    
     public bool IsMouseHeld(MouseButton button)
         => _currentMouseButtons.Contains(button);
 
@@ -128,8 +127,7 @@ public class EventHandler : IDisposable
     public Vector2 GetMousePosition() => _mousePosition;
     public Vector2 GetMouseDelta() => _mouseDelta;
     
-
-    // ==== Скроллинг ====
+    
     public float GetMouseScrollDelta() => _mouseScrollDelta;
 
     public void Dispose()

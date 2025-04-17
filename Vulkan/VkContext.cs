@@ -9,7 +9,7 @@ namespace FluidsVulkan.Vulkan;
 
 public class VkContext : IDisposable
 {
-    private readonly Silk.NET.Vulkan.Instance _instance;
+    private readonly Instance _instance;
     private readonly KhrSurface _surfaceApi;
     private bool _disposedValue;
 
@@ -103,7 +103,7 @@ public class VkContext : IDisposable
                 PNext = &validationFeatures,
 #endif
             };
-            if (Api.CreateInstance(ref instanceInfo, null,
+            if (Api.CreateInstance(in instanceInfo, null,
                     out _instance) != Result.Success)
                 throw new Exception("Instance could not be created");
 #if DEBUG
@@ -115,7 +115,7 @@ public class VkContext : IDisposable
                 $"Could not get instance extension {ExtDebugUtils.ExtensionName}");
 
         _extDebugUtils.CreateDebugUtilsMessenger(_instance,
-            ref debugInfo, null, out _debugUtilsMessenger);
+            in debugInfo, null, out _debugUtilsMessenger);
 #endif
         if (!Api.TryGetInstanceExtension(_instance, out _surfaceApi))
             throw new Exception(
@@ -135,7 +135,7 @@ public class VkContext : IDisposable
 
     public KhrSurface SurfaceApi => _surfaceApi;
 
-    public Silk.NET.Vulkan.Instance Instance => _instance;
+    public Instance Instance => _instance;
 
     public SurfaceKHR Surface { get; }
 

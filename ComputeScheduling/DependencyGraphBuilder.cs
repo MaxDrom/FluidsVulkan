@@ -1,5 +1,3 @@
-using FluidsVulkan.ComputeSchduling;
-
 namespace FluidsVulkan.ComputeScheduling;
 
 public class DependencyGraphBuilder

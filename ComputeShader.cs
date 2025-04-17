@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using FluidsVulkan.ComputeSchduling;
 using FluidsVulkan.ComputeScheduling;
 using FluidsVulkan.ComputeScheduling.Executors;
 using FluidsVulkan.Vulkan;
@@ -17,7 +16,7 @@ public class ComputeShader<T>(VkContext ctx,
     private VkDescriptorPool _descriptorPool;
     private VkSetLayout _layout;
     private DescriptorSet[] _descriptorSets;
-    private VkComputePipeline _computePipeline = null;
+    private VkComputePipeline _computePipeline;
     private T _pushConstant;
     private int _currentSet;
 

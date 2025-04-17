@@ -1,13 +1,13 @@
 using FluidsVulkan.Vulkan;
 using Silk.NET.Vulkan;
 
-namespace FluidsVulkan.ComputeSchduling;
+namespace FluidsVulkan.ComputeScheduling;
 
 public class ImageResource : IComputeResource, IEquatable<ImageResource>
 {
-    public VkImage Image { get; set; }
-    public AccessFlags AccessFlags { get; set; }
-    public ImageLayout Layout { get; set; }
+    public VkImage Image { get; init; }
+    public AccessFlags AccessFlags { get; init; }
+    public ImageLayout Layout { get; init; }
     
     public bool IsOverlap(IComputeResource other)
     {

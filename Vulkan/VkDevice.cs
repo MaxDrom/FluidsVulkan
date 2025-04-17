@@ -73,9 +73,9 @@ public unsafe class VkDevice : IDisposable
         var queueCount = Math.Min(3u,
             queueFamiliesProperties[_graphicsFamilyIndex!.Value]
                 .QueueCount);
-        var defaultProperites = stackalloc float[(int)queueCount];
+        var defaultProperities = stackalloc float[(int)queueCount];
         for (var i = 0; i < queueCount; i++)
-            defaultProperites[i] = 1.0f;
+            defaultProperities[i] = 1.0f;
         if (queueCount < 2)
         {
             Console.ForegroundColor = ConsoleColor.Yellow;

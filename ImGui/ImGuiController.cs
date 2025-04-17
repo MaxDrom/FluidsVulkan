@@ -36,27 +36,19 @@ public struct ImGuiPushConstant
 
 public class ImGuiController : IDisposable
 {
-    private readonly VkContext _ctx;
-    private readonly VkDevice _device;
     private readonly VkAllocator _allocator;
     private readonly VkAllocator _stagingAllocator;
     private VkTexture _fontTexture;
     private VkImageView _fontImageView;
-    private VkCommandPool _commandPool;
-    private VkCommandBuffer _cmdBuffer;
     private VkSampler _fontSampler;
     private readonly VkRenderPass _renderPass;
     private readonly VkFrameBuffer _framebuffer;
     private readonly VkDescriptorPool _descriptorPool;
-    private readonly DescriptorSet _descriprotSet;
     private readonly VkBuffer<ImGuiVertex> _vertexBuffer;
     private readonly VkMappedMemory<ImGuiVertex> _vertexMapped;
     private readonly VkBuffer<ushort> _indexBuffer;
     private readonly VkMappedMemory<ushort> _indexBufferMapped;
     private readonly VkGraphicsPipeline _pipeline;
-    private Dictionary<IEditorComponent, bool> _tabs;
-    private IntPtr _ImGuiCtx = ImGui.CreateContext();
-    private IWindow _window;
     private IEditorComponent[] _components;
     private GameWindow _gameWindow;
 
@@ -71,18 +63,12 @@ public class ImGuiController : IDisposable
         IWindow window,
         IEditorComponent[] components)
     {
+        ImGui.CreateContext();
         IInputContext inputContext = eventHandler.InputContext;
         ImGui.StyleColorsClassic();
         _components = components;
-        _tabs = new Dictionary<IEditorComponent, bool>();
-        foreach (var component in components)
-        {
-            _tabs[component] = false;
-        }
 
-        _ctx = ctx;
-        _device = device;
-        _window = window;
+        var window1 = window;
         _gameWindow = gameWindow;
         var renderTarget = gameWindow.RenderTarget;
         var extent = gameWindow.WindowSize;
@@ -93,25 +79,25 @@ public class ImGuiController : IDisposable
         io.ConfigFlags |= ImGuiConfigFlags.DockingEnable;
         io.BackendFlags |= ImGuiBackendFlags.HasSetMousePos;
         io.FontGlobalScale =
-            _window.FramebufferSize.X / (float)_window.Size.X;
-        inputContext.Mice[0].MouseMove += (m, x) =>
+            window1.FramebufferSize.X / (float)window1.Size.X;
+        inputContext.Mice[0].MouseMove += (_, x) =>
         {
-            var newX = x.X / _window.Size.X *
+            var newX = x.X / window1.Size.X *
                        _gameWindow.WindowSize.Width;
-            var newY = x.Y / _window.Size.Y *
+            var newY = x.Y / window1.Size.Y *
                        _gameWindow.WindowSize.Height;
             ImGui.GetIO()
                 .AddMousePosEvent(newX, newY);
         };
 
-        inputContext.Mice[0].MouseDown += (m, x) =>
+        inputContext.Mice[0].MouseDown += (_, x) =>
         {
             ImGui.GetIO()
                 .AddMouseButtonEvent((int)x,
                     true);
         };
 
-        inputContext.Mice[0].MouseUp += (m, x) =>
+        inputContext.Mice[0].MouseUp += (_, x) =>
         {
             ImGui.GetIO()
                 .AddMouseButtonEvent((int)x,
@@ -122,17 +108,11 @@ public class ImGuiController : IDisposable
         gameWindow.OnUpdate += Update;
         _allocator = allocator;
         _stagingAllocator = stagingAllocator;
-
-        _commandPool = new VkCommandPool(_ctx, _device,
-            CommandPoolCreateFlags.ResetCommandBufferBit,
-            _device.FamilyIndex);
-        _cmdBuffer =
-            _commandPool.AllocateBuffers(CommandBufferLevel.Primary,
-                1)[0];
+        
 
         UploadFonts();
 
-        _fontImageView = new VkImageView(_ctx, _device,
+        _fontImageView = new VkImageView(ctx, device,
             _fontTexture.Image, new ComponentMapping(
                 ComponentSwizzle.Identity,
                 ComponentSwizzle.Identity,
@@ -141,7 +121,7 @@ public class ImGuiController : IDisposable
             new ImageSubresourceRange(ImageAspectFlags.ColorBit,
                 0, 1, 0, 1));
 
-        _fontSampler = new VkSampler(_ctx, _device,
+        _fontSampler = new VkSampler(ctx, device,
             SamplerCreateFlags.None, Filter.Linear, Filter.Linear,
             SamplerMipmapMode.Nearest);
 
@@ -188,11 +168,11 @@ public class ImGuiController : IDisposable
                 .ColorAttachmentOutputBit,
         };
 
-        _renderPass = new VkRenderPass(_ctx, _device, [subPass],
+        _renderPass = new VkRenderPass(ctx, device, [subPass],
             [dependency], [attachmentDescription]);
 
         _framebuffer =
-            new VkFrameBuffer(_ctx, _device, _renderPass,
+            new VkFrameBuffer(ctx, device, _renderPass,
                 extent.Width,
                 extent.Height, 1, [renderTarget]);
 
@@ -238,24 +218,23 @@ public class ImGuiController : IDisposable
             };
 
         using var layout =
-            new VkSetLayout(_ctx, _device, [fontAtlasBinding]);
+            new VkSetLayout(ctx, device, [fontAtlasBinding]);
 
-        _descriptorPool = new VkDescriptorPool(_ctx, _device, [
+        _descriptorPool = new VkDescriptorPool(ctx, device, [
             new DescriptorPoolSize()
             {
                 DescriptorCount = 1,
                 Type = DescriptorType.CombinedImageSampler
             }
         ], 1);
-        _descriprotSet =
-            _descriptorPool.AllocateDescriptors(layout, 1)[0];
-        new VkDescriptorSetUpdater(_ctx, _device)
-            .AppendWrite(_descriprotSet, 0,
+        var descriptorSet = _descriptorPool.AllocateDescriptors(layout, 1)[0];
+        new VkDescriptorSetUpdater(ctx, device)
+            .AppendWrite(descriptorSet, 0,
                 DescriptorType.CombinedImageSampler,
                 [imageInfo]).Update();
 
         ImGui.GetIO().Fonts
-            .SetTexID((IntPtr)_descriprotSet.Handle);
+            .SetTexID((IntPtr)descriptorSet.Handle);
 
         _pipeline = new GraphicsPipelineBuilder()
             .ForRenderPass(_renderPass)
@@ -291,9 +270,7 @@ public class ImGuiController : IDisposable
         _indexBufferMapped = _indexBuffer.Map(0, 128 * 1024);
     }
 
-    bool _fistRun = true;
-
-    public void Update(double a, double b)
+    private void Update(double a, double b)
     {
         ImGui.GetIO().DeltaTime = (float)a;
         var io = ImGui.GetIO();
@@ -330,7 +307,7 @@ public class ImGuiController : IDisposable
         ImGui.EndFrame();
     }
 
-    public void RecordImGuiRender(VkCommandRecordingScope recording,
+    private void RecordImGuiRender(VkCommandRecordingScope recording,
         Rect2D renderArea)
     {
         ImGui.Render();
@@ -346,32 +323,32 @@ public class ImGuiController : IDisposable
             for (var i = 0; i < drawData.CmdListsCount; i++)
             {
                 var cmdList = drawData.CmdLists[i];
-                var verticiesLength = cmdList.VtxBuffer.Size;
-                var verticies =
+                var verticesLength = cmdList.VtxBuffer.Size;
+                var vertices =
                     (ImGuiVertex*)cmdList.VtxBuffer.Data.ToPointer();
 
-                for (var k = 0; k < verticiesLength; k++)
+                for (var k = 0; k < verticesLength; k++)
                 {
-                    _vertexMapped[offset + k] = verticies[k];
+                    _vertexMapped[offset + k] = vertices[k];
                 }
 
-                offset += verticiesLength;
+                offset += verticesLength;
             }
 
             offset = 0;
             for (var i = 0; i < drawData.CmdListsCount; i++)
             {
                 var cmdList = drawData.CmdLists[i];
-                var indiciesLength = cmdList.IdxBuffer.Size;
-                var indicies =
+                var idxBufferSize = cmdList.IdxBuffer.Size;
+                var indices =
                     (ushort*)cmdList.IdxBuffer.Data.ToPointer();
 
-                for (var k = 0; k < indiciesLength; k++)
+                for (var k = 0; k < idxBufferSize; k++)
                 {
-                    _indexBufferMapped[offset + k] = indicies[k];
+                    _indexBufferMapped[offset + k] = indices[k];
                 }
 
-                offset += indiciesLength;
+                offset += idxBufferSize;
             }
         }
 
@@ -406,79 +383,77 @@ public class ImGuiController : IDisposable
                     }
                 }
             ]);
-        using (var pass =
-               recording.BeginRenderPass(_renderPass, _framebuffer,
-                   renderArea))
-        {
-            recording.BindPipeline(_pipeline);
-            if (_fontTexture.Image
-                    .LastLayout != ImageLayout.General)
+        using var pass =
+            recording.BeginRenderPass(_renderPass, _framebuffer,
+                renderArea);
+        recording.BindPipeline(_pipeline);
+        if (_fontTexture.Image
+                .LastLayout != ImageLayout.General)
 
             pass.SetViewport(ref viewport);
-            recording.BindVertexBuffers(0, [_vertexBuffer], [0]);
-            recording.BindIndexBuffer(_indexBuffer, 0,
-                IndexType.Uint16);
-            var pushConstant = new ImGuiPushConstant()
-            {
-                Scale = new Vector2D<float>(
-                    2.0f / drawData.DisplaySize.X,
-                    2.0f / drawData.DisplaySize.Y),
-                Translate =
-                    new Vector2D<float>(-1.0f -
-                                        drawData.DisplayPos.X * 2.0f /
-                                        drawData.DisplaySize.Y,
-                        -1.0f - drawData.DisplayPos.Y * 2.0f /
-                        drawData.DisplaySize.X)
-            };
-            recording.SetPushConstant(
-                _pipeline,
-                ShaderStageFlags.VertexBit, ref pushConstant);
-            var vtxOffset = 0;
-            var idxOffset = 0;
-            for (var i = 0; i < drawData.CmdListsCount; i++)
-            {
-                var cmdList = drawData.CmdLists[i];
+        recording.BindVertexBuffers(0, [_vertexBuffer], [0]);
+        recording.BindIndexBuffer(_indexBuffer, 0,
+            IndexType.Uint16);
+        var pushConstant = new ImGuiPushConstant()
+        {
+            Scale = new Vector2D<float>(
+                2.0f / drawData.DisplaySize.X,
+                2.0f / drawData.DisplaySize.Y),
+            Translate =
+                new Vector2D<float>(-1.0f -
+                                    drawData.DisplayPos.X * 2.0f /
+                                    drawData.DisplaySize.Y,
+                    -1.0f - drawData.DisplayPos.Y * 2.0f /
+                    drawData.DisplaySize.X)
+        };
+        recording.SetPushConstant(
+            _pipeline,
+            ShaderStageFlags.VertexBit, ref pushConstant);
+        var vtxOffset = 0;
+        var idxOffset = 0;
+        for (var i = 0; i < drawData.CmdListsCount; i++)
+        {
+            var cmdList = drawData.CmdLists[i];
 
-                for (var j = 0; j < cmdList.CmdBuffer.Size; j++)
+            for (var j = 0; j < cmdList.CmdBuffer.Size; j++)
+            {
+                var cmdBuffer = cmdList.CmdBuffer[j];
+                Rect2D scissor = new()
                 {
-                    var cmdBuffer = cmdList.CmdBuffer[j];
-                    Rect2D scissor = new()
+                    Offset = new Offset2D
                     {
-                        Offset = new Offset2D
-                        {
-                            X = (int)(cmdBuffer.ClipRect.X *
-                                      drawData.FramebufferScale.X),
-                            Y = (int)(cmdBuffer.ClipRect.Y *
-                                      drawData.FramebufferScale.X)
-                        },
-                        Extent = new Extent2D
-                        {
-                            Width = (uint)(cmdBuffer.ClipRect.Z -
-                                           cmdBuffer.ClipRect.X) *
-                                    (uint)drawData.FramebufferScale.X,
-                            Height = (uint)(cmdBuffer.ClipRect.W -
-                                            cmdBuffer.ClipRect.Y) *
-                                     (uint)drawData.FramebufferScale.X
-                        }
-                    };
+                        X = (int)(cmdBuffer.ClipRect.X *
+                                  drawData.FramebufferScale.X),
+                        Y = (int)(cmdBuffer.ClipRect.Y *
+                                  drawData.FramebufferScale.X)
+                    },
+                    Extent = new Extent2D
+                    {
+                        Width = (uint)(cmdBuffer.ClipRect.Z -
+                                       cmdBuffer.ClipRect.X) *
+                                (uint)drawData.FramebufferScale.X,
+                        Height = (uint)(cmdBuffer.ClipRect.W -
+                                        cmdBuffer.ClipRect.Y) *
+                                 (uint)drawData.FramebufferScale.X
+                    }
+                };
 
 
-                    pass.SetScissor(ref scissor);
-                    var desc =
-                        new DescriptorSet((ulong)cmdBuffer.TextureId);
-                    recording.BindDescriptorSets(
-                        PipelineBindPoint.Graphics,
-                        _pipeline.PipelineLayout,
-                        [desc]);
+                pass.SetScissor(ref scissor);
+                var desc =
+                    new DescriptorSet((ulong)cmdBuffer.TextureId);
+                recording.BindDescriptorSets(
+                    PipelineBindPoint.Graphics,
+                    _pipeline.PipelineLayout,
+                    [desc]);
 
-                    pass.DrawIndexed(cmdBuffer.ElemCount, 1,
-                        (uint)idxOffset + cmdBuffer.IdxOffset, 0,
-                        (uint)vtxOffset + cmdBuffer.VtxOffset);
-                }
-
-                vtxOffset += cmdList.VtxBuffer.Size;
-                idxOffset += cmdList.IdxBuffer.Size;
+                pass.DrawIndexed(cmdBuffer.ElemCount, 1,
+                    (uint)idxOffset + cmdBuffer.IdxOffset, 0,
+                    (uint)vtxOffset + cmdBuffer.VtxOffset);
             }
+
+            vtxOffset += cmdList.VtxBuffer.Size;
+            idxOffset += cmdList.IdxBuffer.Size;
         }
     }
 
@@ -504,11 +479,7 @@ public class ImGuiController : IDisposable
             ImageUsageFlags.TransferDstBit,
             SampleCountFlags.Count1Bit, SharingMode.Exclusive,
             _allocator);
-
-        var copyBuffer =
-            _commandPool.AllocateBuffers(CommandBufferLevel.Primary,
-                1)[0];
-
+        
         using (var map = stagingBuffer.Map(0, uploadSize))
         {
             for (ulong i = 0; i < uploadSize; i++)
@@ -543,7 +514,6 @@ public class ImGuiController : IDisposable
         _fontSampler.Dispose();
         _fontTexture.Dispose();
         _fontImageView.Dispose();
-        _commandPool.Dispose();
         _renderPass.Dispose();
         _framebuffer.Dispose();
         _descriptorPool.Dispose();

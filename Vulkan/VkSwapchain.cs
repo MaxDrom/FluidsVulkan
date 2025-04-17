@@ -4,8 +4,6 @@ namespace FluidsVulkan.Vulkan;
 
 public class VkSwapchain : IDisposable
 {
-    private readonly VkContext _ctx;
-
     private readonly SwapchainKHR _swapchain;
     private readonly VkSwapchainContext _swapchainCtx;
     private bool _disposedValue;
@@ -13,7 +11,7 @@ public class VkSwapchain : IDisposable
     public VkSwapchain(VkContext ctx,
         SurfaceKHR surface,
         VkSwapchainContext swapchainCtx,
-        uint[] familyIndicies,
+        uint[] familyIndices,
         uint imageCount,
         Format imageFormat,
         ColorSpaceKHR imageColorSpace,
@@ -27,7 +25,6 @@ public class VkSwapchain : IDisposable
             ImageUsageFlags.ColorAttachmentBit,
         VkSwapchain oldSwapchain = null)
     {
-        _ctx = ctx;
         var swapchainCreateInfo = new SwapchainCreateInfoKHR
         {
             SType = StructureType.SwapchainCreateInfoKhr,
@@ -46,10 +43,10 @@ public class VkSwapchain : IDisposable
         };
         if(oldSwapchain != null)
             swapchainCreateInfo.OldSwapchain = oldSwapchain._swapchain;
-        var hashSet = familyIndicies.ToHashSet();
+        var hashSet = familyIndices.ToHashSet();
         unsafe
         {
-            fixed (uint* pfamilyIndicies = hashSet.ToArray())
+            fixed (uint* pFamilyIndices = hashSet.ToArray())
             {
                 if (hashSet.Count == 1)
                 {
@@ -65,7 +62,7 @@ public class VkSwapchain : IDisposable
                     swapchainCreateInfo.QueueFamilyIndexCount =
                         (uint)hashSet.Count;
                     swapchainCreateInfo.PQueueFamilyIndices =
-                        pfamilyIndicies;
+                        pFamilyIndices;
                 }
 
                 swapchainCtx.CreateUnmanagedSwapchain(
@@ -97,23 +94,23 @@ public class VkSwapchain : IDisposable
         out uint uIndex,
         VkFence fence = null)
     {
-        var ffence = new Fence();
+        var tmpFence = new Fence();
         uint tmp;
         Result result;
-        if (fence != null) ffence = fence.InternalFence;
+        if (fence != null) tmpFence = fence.InternalFence;
 
         unsafe
         {
             result = _swapchainCtx.Api.AcquireNextImage(device.Device,
                 _swapchain, ulong.MaxValue, semaphore.Semaphore,
-                ffence, &tmp);
+                tmpFence, &tmp);
         }
 
         uIndex = tmp;
         return result;
     }
 
-    protected virtual void Dispose(bool disposing)
+    private void Dispose(bool disposing)
     {
         if (_disposedValue) return;
         _swapchainCtx.DestroySwapchain(_swapchain);

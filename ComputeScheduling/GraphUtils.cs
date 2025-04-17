@@ -13,7 +13,7 @@ public static class GraphUtils
         IEnumerable<TNode> nodes,
         Func<TNode, IEnumerable<TNode>> getNeighbors)
     {
-        var states = nodes.ToDictionary(z => z, z => NodeState.White);
+        var states = nodes.ToDictionary(z => z, _ => NodeState.White);
         List<TNode> topSort = [];
         while (true)
         {

@@ -286,7 +286,7 @@ public sealed class GraphicsPipelineBuilder
                 var result = new VkGraphicsPipeline(ctx, device,
                     _scope._shaderInfos, _scope._setLayouts,
                     _scope._pushConstantRanges, _scope._renderPass,
-                    subpassIndex, _scope._dynamicStates,
+                    subpassIndex, _scope._dynamicStates.ToArray(),
                     vertexInputStateCreateInfo, _scope._viewport,
                     _scope._scissor, _scope._inputAssemblyState,
                     pRasterization, pMultisapmling, &colorBlendInfo,

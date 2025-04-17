@@ -50,10 +50,9 @@ public class Editor : IEditorComponent
         var vx = ImGui.GetContentRegionAvail();
         
         float dy = vx.Y/_properties.Count;
-        float y = 0;
         foreach (var (obj, properties) in _properties)
         {
-            ImGui.BeginChild($"###{obj}", new(vx.X,dy),ImGuiChildFlags.Borders|ImGuiChildFlags.FrameStyle);
+            ImGui.BeginChild($"###{obj}", vx with { Y = dy },ImGuiChildFlags.Borders|ImGuiChildFlags.FrameStyle);
             var name = obj.GetType().Name;
             var wrapL = "###    ";
             var wrapR = "    ###";

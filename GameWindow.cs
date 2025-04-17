@@ -139,7 +139,6 @@ public sealed class GameWindow : IDisposable
             _swapchain.Dispose();
             _swapchainCtx.Dispose();
         }
-
         _disposedValue = true;
     }
 
@@ -414,7 +413,7 @@ public sealed class GameWindow : IDisposable
         if (OnUpdateAsync != null)
             await OnUpdateAsync!.Invoke(frameTime, _totalTime);
         _computeBuffer.Reset(CommandBufferResetFlags
-            .ReleaseResourcesBit);
+            .None);
         using (var recording =
                _computeBuffer.Begin(CommandBufferUsageFlags
                    .SimultaneousUseBit))

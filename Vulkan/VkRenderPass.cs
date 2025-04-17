@@ -74,7 +74,7 @@ public class VkRenderPass : IDisposable
                         (uint)subpassDependencies.Count();
                     renderPassCreateInfo.PDependencies = pdeps;
                     if (_ctx.Api.CreateRenderPass(_device.Device,
-                            ref renderPassCreateInfo, null,
+                            in renderPassCreateInfo, null,
                             out _renderPass) != Result.Success)
                         throw new Exception(
                             "Failed to create render pass");

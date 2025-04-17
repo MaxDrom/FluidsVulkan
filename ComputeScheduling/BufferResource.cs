@@ -1,7 +1,7 @@
 using FluidsVulkan.Vulkan;
 using Silk.NET.Vulkan;
 
-namespace FluidsVulkan.ComputeSchduling;
+namespace FluidsVulkan.ComputeScheduling;
 
 public class BufferResource : IComputeResource
 {

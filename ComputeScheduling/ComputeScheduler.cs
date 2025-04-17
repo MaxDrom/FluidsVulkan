@@ -1,6 +1,4 @@
-using FluidsVulkan.ComputeSchduling;
 using FluidsVulkan.Vulkan;
-using FluidsVulkan.Vulkan.VkAllocatorSystem;
 using Silk.NET.Vulkan;
 
 namespace FluidsVulkan.ComputeScheduling;
@@ -74,8 +72,10 @@ public class ComputeRecorder :
         var bufferBarriers = new List<BufferMemoryBarrier>();
         var imageBarriers = new List<VkImageMemoryBarrier>();
         var hashset = new HashSet<IComputeResource>();
+        
         foreach (var task in tasks)
         {
+            //Console.WriteLine(task);
             bufferBarriers.Clear();
             imageBarriers.Clear();
             hashset.Clear();
@@ -127,24 +127,37 @@ public class ComputeRecorder :
         if (srcAccessFlag == AccessFlags.ShaderReadBit &&
             resource.AccessFlags == AccessFlags.ShaderReadBit)
             return (null, null);
+        var srcAccessMask =
+            CheckSupport(_pipelineStage, srcAccessFlag)
+                ? AccessFlags.None
+                : srcAccessFlag;
         var bufferMemoryBarrier = new BufferMemoryBarrier()
         {
             Buffer = buffer.Buffer,
             DstAccessMask = resource.AccessFlags,
-            SrcAccessMask =
-                _pipelineStage == PipelineStageFlags.TopOfPipeBit
-                    ? AccessFlags.None
-                    : srcAccessFlag,
+            SrcAccessMask = srcAccessMask,
             Offset = 0,
             SType = StructureType.BufferMemoryBarrier,
             Size = buffer.Size
         };
-
+        
         _bufferAccessFlags[buffer] = resource.AccessFlags;
 
         return (bufferMemoryBarrier, null);
     }
 
+    private bool CheckSupport(PipelineStageFlags pipelineStageFlags, AccessFlags accessFlags)
+    {
+        switch (pipelineStageFlags)
+        {
+            case PipelineStageFlags.TopOfPipeBit:
+                return false;
+            case PipelineStageFlags.TransferBit:
+                return accessFlags is AccessFlags.TransferReadBit or AccessFlags.TransferWriteBit;
+            default:
+                return true;
+        }
+    }
     public (BufferMemoryBarrier?, VkImageMemoryBarrier?) Visit(
         ImageResource resource)
     {

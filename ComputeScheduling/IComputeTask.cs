@@ -1,8 +1,7 @@
-using FluidsVulkan.ComputeScheduling;
 using FluidsVulkan.Vulkan;
 using Silk.NET.Vulkan;
 
-namespace FluidsVulkan.ComputeSchduling;
+namespace FluidsVulkan.ComputeScheduling;
 
 public interface IComputeTask
 {

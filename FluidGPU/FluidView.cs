@@ -62,7 +62,6 @@ public sealed class FluidView : IDisposable, IParametrized
     private readonly VkBuffer<uint> _indexBuffer;
     private readonly VkCommandPool _commandPoolTransfer;
     private readonly VkCommandBuffer _copyBuffer;
-    private VkAllocator _allocator;
     private VkAllocator _stagingAllocator;
     private VkFrameBuffer _framebuffer;
     private VkFence _copyFence;
@@ -127,7 +126,6 @@ public sealed class FluidView : IDisposable, IParametrized
         _fluidEngine = fluidEngine;
         _device = device;
         _stagingAllocator = stagingAllocator;
-        _allocator = allocator;
         _ctx = ctx;
         var renderTarget = window.RenderTarget;
         _extent = window.WindowSize;
@@ -187,11 +185,11 @@ public sealed class FluidView : IDisposable, IParametrized
         _vertexBuffer = new VkBuffer<Vertex>(_vertices.Length,
             BufferUsageFlags.VertexBufferBit |
             BufferUsageFlags.TransferDstBit, SharingMode.Exclusive,
-            _allocator);
+            allocator);
         _indexBuffer = new VkBuffer<uint>(_indices.Length,
             BufferUsageFlags.IndexBufferBit |
             BufferUsageFlags.TransferDstBit, SharingMode.Exclusive,
-            _allocator);
+            allocator);
         _copyFence = new VkFence(_ctx, _device);
 
         CopyDataToBuffer(_indices, _indexBuffer);
@@ -202,7 +200,7 @@ public sealed class FluidView : IDisposable, IParametrized
             BufferUsageFlags.VertexBufferBit |
             BufferUsageFlags.TransferDstBit,
             SharingMode.Exclusive,
-            _allocator);
+            allocator);
     }
 
     public void RecordDraw(
@@ -259,7 +257,7 @@ public sealed class FluidView : IDisposable, IParametrized
 
         ComputeScheduler.Instance.AddTask(new CopyBufferTask(
             _fluidEngine.Buffer, _instanceBuffer,
-            _instanceBuffer.Size, 0, 0));
+            _instanceBuffer.Size));
     }
 
     private static VkGraphicsPipeline CreateGraphicsPipeline(

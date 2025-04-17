@@ -1,4 +1,4 @@
-namespace FluidsVulkan.ComputeSchduling;
+namespace FluidsVulkan.ComputeScheduling;
 
 public interface IComputeResource : IEquatable<IComputeResource>
 {
