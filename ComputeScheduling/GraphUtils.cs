@@ -1,3 +1,5 @@
+using System.Runtime.InteropServices;
+
 namespace FluidsVulkan.ComputeScheduling;
 
 public class Tarjan<TNode>
@@ -76,7 +78,12 @@ public class Kahn<TNode>
 
         foreach (var node in nodes)
         foreach (var neigh in getNeighbors(node))
-            _degrees[neigh]++;
+        {
+            ref var degree =
+                ref CollectionsMarshal.GetValueRefOrNullRef(_degrees,
+                    neigh);
+            degree++;
+        }
 
         foreach (var node in nodes)
             if (_degrees[node] == 0)
@@ -89,13 +96,34 @@ public class Kahn<TNode>
 
             foreach (var node in getNeighbors(current))
             {
-                _degrees[node]--;
-                if (_degrees[node] == 0)
+                ref var degree =
+                    ref CollectionsMarshal.GetValueRefOrNullRef(_degrees,
+                        node);
+                degree--;
+                if (degree == 0)
                     _queue.Enqueue(node);
             }
         }
 
         topSort.Reverse();
         return topSort.Count == nodes.Count;
+    }
+}
+
+ref struct SpanStack<TNode>(ref Span<TNode> span)
+{
+    private readonly Span<TNode> _span = span;
+    private int _currentIndex = 0;
+    
+    public int Count => _currentIndex;
+
+    public void Push(TNode node)
+    {
+        _span[_currentIndex++] = node;
+    }
+    
+    public TNode Pop()
+    {
+        return _span[_currentIndex--];
     }
 }

@@ -270,13 +270,6 @@ public sealed class GameWindow : IDisposable
 
     private void RecordBuffer(VkCommandBuffer buffer, int imageIndex)
     {
-        Viewport viewport = new()
-        {
-            X = 0.0f,
-            Y = 0.0f,
-            Width = _textureBuffer.Extent.Width,
-            Height = _textureBuffer.Extent.Height,
-        };
         Rect2D scissor = new(new Offset2D(0, 0),
             new Extent2D(_textureBuffer.Extent.Width,
                 _textureBuffer.Extent.Height));

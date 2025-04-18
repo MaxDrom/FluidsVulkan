@@ -16,7 +16,7 @@ public class ComputeScheduler
         new();
 
     private readonly Kahn<IGpuTask> _graphUtils = new();
-    private readonly List<IGpuTask> _topological = new();
+    private readonly List<IGpuTask> _topological = [];
 
     public static ComputeScheduler Instance
     {
@@ -32,7 +32,7 @@ public class ComputeScheduler
             return _instance;
         }
     }
-    private ConcurrentQueue<IGpuTask> _tasks = new();
+    private readonly ConcurrentQueue<IGpuTask> _tasks = new();
     public void AddTask(IComputeTask task)
     {
         _tasks.Enqueue(task);
