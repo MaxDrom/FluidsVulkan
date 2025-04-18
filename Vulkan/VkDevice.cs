@@ -69,7 +69,6 @@ public unsafe class VkDevice : IDisposable
                 "Failed to find suitable queue family");
 
 
-        
         var queueCount = Math.Min(3u,
             queueFamiliesProperties[_graphicsFamilyIndex!.Value]
                 .QueueCount);
@@ -92,10 +91,9 @@ public unsafe class VkDevice : IDisposable
             QueueFamilyIndex = _graphicsFamilyIndex.Value,
             PQueuePriorities = &defaultPropery,
         };
-        
 
 
-        DeviceCreateInfo deviceCreateInfo = new DeviceCreateInfo
+        var deviceCreateInfo = new DeviceCreateInfo
         {
             SType = StructureType.DeviceCreateInfo,
             EnabledLayerCount =
@@ -121,16 +119,16 @@ public unsafe class VkDevice : IDisposable
         var index = 0u;
         _ctx.Api.GetDeviceQueue(_device,
             _graphicsFamilyIndex!.Value, index, out _graphicsQueue);
-        index = (++index) % queueCount;
+        index = ++index % queueCount;
 
         _ctx.Api.GetDeviceQueue(_device,
             _graphicsFamilyIndex!.Value, index, out _computeQueue);
-        index = (++index) % queueCount;
-        
+        index = ++index % queueCount;
+
         _ctx.Api.GetDeviceQueue(_device,
             _graphicsFamilyIndex!.Value, index, out _presentQueue);
-        index = (++index) % queueCount;
-        
+        index = ++index % queueCount;
+
         _ctx.Api.GetDeviceQueue(_device,
             _graphicsFamilyIndex!.Value, index, out _transferQueue);
     }

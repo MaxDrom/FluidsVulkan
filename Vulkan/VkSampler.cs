@@ -4,11 +4,9 @@ namespace FluidsVulkan.Vulkan;
 
 public class VkSampler : IDisposable
 {
-    private VkContext _ctx;
-    private VkDevice _device;
-    private Sampler _sampler;
-
-    public Sampler Sampler => _sampler;
+    private readonly VkContext _ctx;
+    private readonly VkDevice _device;
+    private readonly Sampler _sampler;
 
     public VkSampler(VkContext ctx,
         VkDevice device,
@@ -36,9 +34,9 @@ public class VkSampler : IDisposable
         unsafe
         {
             var createInfo = new SamplerCreateInfo(
-                sType: StructureType.SamplerCreateInfo,
-                pNext: null,
-                flags: flags,
+                StructureType.SamplerCreateInfo,
+                null,
+                flags,
                 minFilter: minFilter,
                 magFilter: magFilter,
                 mipmapMode: mipmapMode,
@@ -62,18 +60,20 @@ public class VkSampler : IDisposable
         }
     }
 
+    public Sampler Sampler => _sampler;
+
+    public void Dispose()
+    {
+        ReleaseUnmanagedResources();
+        GC.SuppressFinalize(this);
+    }
+
     private void ReleaseUnmanagedResources()
     {
         unsafe
         {
             _ctx.Api.DestroySampler(_device.Device, _sampler, null);
         }
-    }
-
-    public void Dispose()
-    {
-        ReleaseUnmanagedResources();
-        GC.SuppressFinalize(this);
     }
 
     ~VkSampler()

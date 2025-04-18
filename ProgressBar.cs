@@ -6,15 +6,16 @@ namespace FluidsVulkan;
 
 public sealed class ProgressBar : IDisposable
 {
-    private int _blocks;
-    private float _progress;
     private const string Animation = @"|/-\";
-    private Timer _timer;
-    private int _tick;
-    private int _stringLength;
 
     private readonly TimeSpan _animationInterval =
         TimeSpan.FromSeconds(1.0 / 10);
+
+    private readonly int _blocks;
+    private readonly Timer _timer;
+    private float _progress;
+    private int _stringLength;
+    private int _tick;
 
     public ProgressBar(int blocks)
     {
@@ -23,6 +24,12 @@ public sealed class ProgressBar : IDisposable
         _timer.AutoReset = true;
         _timer.Enabled = true;
         _timer.Elapsed += UpdateText;
+    }
+
+    public void Dispose()
+    {
+        Thread.Sleep(_animationInterval);
+        _timer.Dispose();
     }
 
     public void Update(float progress)
@@ -45,13 +52,7 @@ public sealed class ProgressBar : IDisposable
         stringBuilder.Append('\b', _stringLength);
         stringBuilder.Append(text);
         _stringLength = text.Length;
-        _tick = (++_tick) % Animation.Length;
+        _tick = ++_tick % Animation.Length;
         Console.Write(stringBuilder);
-    }
-
-    public void Dispose()
-    {
-        Thread.Sleep(_animationInterval);
-        _timer.Dispose();
     }
 }

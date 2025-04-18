@@ -7,7 +7,6 @@ public class VkImageView : IDisposable
     private readonly VkContext _ctx;
     private readonly VkDevice _device;
     private readonly ImageView _imageView;
-    private readonly VkImage _image;
     private bool _disposedValue;
 
     public VkImageView(VkContext ctx,
@@ -17,7 +16,7 @@ public class VkImageView : IDisposable
         ImageSubresourceRange subresourceRange,
         ImageViewType? viewType = null)
     {
-        _image = image;
+        Image = image;
         viewType ??= (ImageViewType)image.Type;
         var imageCreateInfo = new ImageViewCreateInfo
         {
@@ -40,7 +39,8 @@ public class VkImageView : IDisposable
     }
 
     public ImageView ImageView => _imageView;
-    public VkImage Image => _image;
+    public VkImage Image { get; }
+
     public void Dispose()
     {
         Dispose(true);

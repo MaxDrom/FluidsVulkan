@@ -35,14 +35,14 @@ ivec2 imSize = imageSize(bucketSizes);
 void main()
 {
     uint id = gl_GlobalInvocationID.x;
-    if(id>=push.bufferLength)
+    if (id>=push.bufferLength)
     return;
 
     Boid boid = boids_in[id];
     //debugPrintfEXT("%f %f %f %f", boid.pos.x, boid.pos.y, (id/100)/99.0, (id%100)/99.0);
-    ivec2 grid_id = posmod(ivec2(floor(boid.pos*(imSize-ivec2(1)))),imSize);
+    ivec2 grid_id = posmod(ivec2(floor(boid.pos*(imSize-ivec2(1)))), imSize);
 
-    uint id_n = imageAtomicAdd(bucketSizes, grid_id , 1);
+    uint id_n = imageAtomicAdd(bucketSizes, grid_id, 1);
 }
 
 

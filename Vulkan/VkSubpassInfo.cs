@@ -12,5 +12,6 @@ public class VkSubpassInfo(PipelineBindPoint bindPoint,
         private set;
     } = colorAttachmentReferences;
 
-    public PipelineBindPoint BindPoint { get; private set; } = bindPoint;
+    public PipelineBindPoint BindPoint { get; private set; } =
+        bindPoint;
 }

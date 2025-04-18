@@ -13,20 +13,27 @@ public class ComputeShader<T>(VkContext ctx,
     : IDisposable
     where T : unmanaged
 {
-    private VkDescriptorPool _descriptorPool;
-    private VkSetLayout _layout;
-    private DescriptorSet[] _descriptorSets;
-    private VkComputePipeline _computePipeline;
-    private T _pushConstant;
-    private int _currentSet;
-
-    private Dictionary<int, (IVkBuffer, AccessFlags)>
+    private readonly Dictionary<int, (IVkBuffer, AccessFlags)>
         _bufferBindings =
             [];
 
-    private Dictionary<int, (VkImageView, AccessFlags)>
+    private readonly Dictionary<int, (VkImageView, AccessFlags)>
         _imageBindings =
             [];
+
+    private VkComputePipeline _computePipeline;
+    private int _currentSet;
+    private VkDescriptorPool _descriptorPool;
+    private DescriptorSet[] _descriptorSets;
+    private VkSetLayout _layout;
+    private T _pushConstant;
+
+    public void Dispose()
+    {
+        _descriptorPool?.Dispose();
+        _layout?.Dispose();
+        _computePipeline?.Dispose();
+    }
 
     private void InitPipeline()
     {
@@ -36,41 +43,37 @@ public class ComputeShader<T>(VkContext ctx,
         var bufferCount = _bufferBindings.Count;
         var imagesCount = _imageBindings.Count;
         foreach (var (binding, _) in _bufferBindings)
-        {
             bindings.Add(
-                new DescriptorSetLayoutBinding()
+                new DescriptorSetLayoutBinding
                 {
                     Binding = (uint)binding,
                     DescriptorCount = 1,
                     DescriptorType = DescriptorType.StorageBuffer,
-                    StageFlags = ShaderStageFlags.ComputeBit
+                    StageFlags = ShaderStageFlags.ComputeBit,
                 });
-        }
 
         foreach (var (binding, _) in _imageBindings)
-        {
             bindings.Add(
-                new DescriptorSetLayoutBinding()
+                new DescriptorSetLayoutBinding
                 {
                     Binding = (uint)binding,
                     DescriptorCount = 1,
                     DescriptorType = DescriptorType.StorageImage,
-                    StageFlags = ShaderStageFlags.ComputeBit
+                    StageFlags = ShaderStageFlags.ComputeBit,
                 });
-        }
 
         _layout = new VkSetLayout(ctx, device, [..bindings]);
         _computePipeline = new VkComputePipeline(ctx, device,
             new VkShaderInfo(shaderModule, "main"), [_layout], [
                 new PushConstantRange(ShaderStageFlags.ComputeBit, 0,
-                    (uint)Marshal.SizeOf<T>())
+                    (uint)Marshal.SizeOf<T>()),
             ]);
 
         var descriprotSizes = new List<DescriptorPoolSize>();
 
         if (bufferCount > 0)
             descriprotSizes.Add(
-                new DescriptorPoolSize()
+                new DescriptorPoolSize
                 {
                     Type = DescriptorType.StorageBuffer,
                     DescriptorCount = (uint)bufferCount * 1000,
@@ -78,7 +81,7 @@ public class ComputeShader<T>(VkContext ctx,
 
         if (imagesCount > 0)
             descriprotSizes.Add(
-                new DescriptorPoolSize()
+                new DescriptorPoolSize
                 {
                     Type = DescriptorType.StorageImage,
                     DescriptorCount = (uint)imagesCount * 1000,
@@ -86,7 +89,7 @@ public class ComputeShader<T>(VkContext ctx,
 
 
         _descriptorPool = new VkDescriptorPool(ctx, device, [
-            .. descriprotSizes
+            .. descriprotSizes,
         ], 1000);
         _descriptorSets =
             _descriptorPool.AllocateDescriptors(_layout, 1000);
@@ -100,35 +103,31 @@ public class ComputeShader<T>(VkContext ctx,
             InitPipeline();
         var updater = new VkDescriptorSetUpdater(ctx, device);
         foreach (var (binding, (buffer, _)) in _bufferBindings)
-        {
             updater = updater
                 .AppendWrite(_descriptorSets[_currentSet], binding,
                     DescriptorType.StorageBuffer,
                     [
-                        new DescriptorBufferInfo()
+                        new DescriptorBufferInfo
                         {
                             Buffer = buffer.Buffer,
                             Offset = 0,
-                            Range = buffer.Size
+                            Range = buffer.Size,
                         },
                     ]
                 );
-        }
 
         foreach (var (binding, (image, _)) in _imageBindings)
-        {
             updater = updater
                 .AppendWrite(_descriptorSets[_currentSet], binding,
                     DescriptorType.StorageImage,
                     [
-                        new DescriptorImageInfo()
+                        new DescriptorImageInfo
                         {
                             ImageLayout = ImageLayout.General,
-                            ImageView = image.ImageView
+                            ImageView = image.ImageView,
                         },
                     ]
                 );
-        }
 
         updater.Update();
 
@@ -138,55 +137,55 @@ public class ComputeShader<T>(VkContext ctx,
         foreach (var (_, (buffer, accessFlags)) in _bufferBindings)
         {
             if (accessFlags.HasFlag(AccessFlags.ShaderReadBit))
-                reads.Add(new BufferResource()
+                reads.Add(new BufferResource
                 {
                     Buffer = buffer,
-                    AccessFlags = accessFlags
+                    AccessFlags = accessFlags,
                 });
 
             if (accessFlags.HasFlag(AccessFlags.ShaderWriteBit))
-                writes.Add(new BufferResource()
+                writes.Add(new BufferResource
                 {
                     Buffer = buffer,
-                    AccessFlags = accessFlags
+                    AccessFlags = accessFlags,
                 });
         }
 
         foreach (var (_, (image, accessFlags)) in _imageBindings)
         {
             if (accessFlags.HasFlag(AccessFlags.ShaderReadBit))
-                reads.Add(new ImageResource()
+                reads.Add(new ImageResource
                 {
                     Image = image.Image,
                     AccessFlags = accessFlags,
-                    Layout = ImageLayout.General
+                    Layout = ImageLayout.General,
                 });
 
             if (accessFlags.HasFlag(AccessFlags.ShaderWriteBit))
-                writes.Add(new ImageResource()
+                writes.Add(new ImageResource
                 {
                     Image = image.Image,
                     AccessFlags = accessFlags,
-                    Layout = ImageLayout.General
+                    Layout = ImageLayout.General,
                 });
         }
 
-        ComputeScheduler.Instance.AddTask(new DispatchTask()
+        ComputeScheduler.Instance.AddTask(new DispatchTask
         {
             Reads = reads,
             Writes = writes,
-            Executor = new DispatchExecutor<T>()
+            Executor = new DispatchExecutor<T>
             {
                 PushConstant = _pushConstant,
                 DescriptorSet = _descriptorSets[_currentSet],
                 NumGroupsX = threadGroupCountX,
                 NumGroupsY = threadGroupCountY,
                 NumGroupsZ = threadGroupCountZ,
-                Pipeline = _computePipeline
-            }
+                Pipeline = _computePipeline,
+            },
         });
 
-        _currentSet = (++_currentSet) % 1000;
+        _currentSet = ++_currentSet % 1000;
     }
 
 
@@ -208,12 +207,5 @@ public class ComputeShader<T>(VkContext ctx,
         AccessFlags accessFlags)
     {
         _imageBindings[binding] = (view, accessFlags);
-    }
-
-    public void Dispose()
-    {
-        _descriptorPool?.Dispose();
-        _layout?.Dispose();
-        _computePipeline?.Dispose();
     }
 }

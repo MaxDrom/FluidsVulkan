@@ -7,6 +7,7 @@ public class BufferResource : IComputeResource
 {
     public IVkBuffer Buffer { get; init; }
     public AccessFlags AccessFlags { get; init; }
+
     public bool IsOverlap(IComputeResource other)
     {
         if (other is BufferResource otherBufferResource)
@@ -19,14 +20,14 @@ public class BufferResource : IComputeResource
         return visitor.Visit(this);
     }
 
-    private bool Equals(BufferResource other)
-    {
-        return Buffer.Equals(other.Buffer);
-    }
-
     public bool Equals(IComputeResource other)
     {
         return Equals(other as BufferResource);
+    }
+
+    private bool Equals(BufferResource other)
+    {
+        return Buffer.Equals(other.Buffer);
     }
 
     public override bool Equals(object obj)
@@ -42,12 +43,14 @@ public class BufferResource : IComputeResource
         return Buffer.GetHashCode();
     }
 
-    public static bool operator ==(BufferResource left, BufferResource right)
+    public static bool operator ==(BufferResource left,
+        BufferResource right)
     {
         return Equals(left, right);
     }
 
-    public static bool operator !=(BufferResource left, BufferResource right)
+    public static bool operator !=(BufferResource left,
+        BufferResource right)
     {
         return !Equals(left, right);
     }

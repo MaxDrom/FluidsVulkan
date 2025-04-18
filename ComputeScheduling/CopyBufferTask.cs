@@ -3,7 +3,7 @@ using Silk.NET.Vulkan;
 
 namespace FluidsVulkan.ComputeScheduling;
 
-public struct CopyBufferTask(IVkBuffer source,
+public readonly struct CopyBufferTask(IVkBuffer source,
     IVkBuffer destination,
     ulong size,
     ulong srcOffset = 0,
@@ -11,21 +11,16 @@ public struct CopyBufferTask(IVkBuffer source,
 )
     : IComputeTask
 {
-    private BufferResource _source = new()
+    private readonly BufferResource _source = new()
     {
-        AccessFlags = AccessFlags.TransferReadBit, Buffer = source
+        AccessFlags = AccessFlags.TransferReadBit, Buffer = source,
     };
 
-    private BufferResource _destination = new()
+    private readonly BufferResource _destination = new()
     {
         AccessFlags = AccessFlags.TransferWriteBit,
-        Buffer = destination
+        Buffer = destination,
     };
-    
-    public ulong Size { get; } = size;
-
-    public ulong SrcOffset { get; } = srcOffset;
-    public ulong DstOffset { get; } = dstOffset;
 
     public List<IComputeResource> Reads => [_source];
     public List<IComputeResource> Writes => [_destination];
@@ -34,7 +29,7 @@ public struct CopyBufferTask(IVkBuffer source,
         VkCommandRecordingScope scope)
     {
         scope.CopyBuffer(_source.Buffer, _destination.Buffer,
-            SrcOffset, DstOffset, Size);
+            srcOffset, dstOffset, size);
 
         return PipelineStageFlags.TransferBit;
     }

@@ -42,35 +42,35 @@ layout(push_constant) uniform PushConstants {
 void main()
 {
     uint id = gl_GlobalInvocationID.x;
-    if(id>=push.bufferLength)
+    if (id>=push.bufferLength)
     return;
-    
-    Boid boid = boids_in[id];
-//    if(length(boid.vel) > 0.5)
-//        boid.vel = normalize(boid.vel)*0.5;
-    boid.pos += boid.vel*push.delta;
-//    if(boid.pos.x <0)
-//    {
-//        boid.pos.x = 0;
-//        boid.vel.x = 0.95*abs(boid.vel.x);
-//    }
-//    if(boid.pos.y <0)
-//    {
-//        boid.pos.y = 0;
-//        boid.vel.y = 0.95*abs(boid.vel.y);
-//    }
-//    if(boid.pos.x >1)
-//    {
-//        boid.pos.x = 1;
-//        boid.vel.x = -0.95*abs(boid.vel.x);
-//    }
-//    if(boid.pos.y >1)
-//    {
-//        boid.pos.y = 1;
-//        boid.vel.y = -0.95*abs(boid.vel.y);
-//    }
 
-   // handleCollisionWithBH(boid);
+    Boid boid = boids_in[id];
+    //    if(length(boid.vel) > 0.5)
+    //        boid.vel = normalize(boid.vel)*0.5;
+    boid.pos += boid.vel*push.delta;
+    //    if(boid.pos.x <0)
+    //    {
+    //        boid.pos.x = 0;
+    //        boid.vel.x = 0.95*abs(boid.vel.x);
+    //    }
+    //    if(boid.pos.y <0)
+    //    {
+    //        boid.pos.y = 0;
+    //        boid.vel.y = 0.95*abs(boid.vel.y);
+    //    }
+    //    if(boid.pos.x >1)
+    //    {
+    //        boid.pos.x = 1;
+    //        boid.vel.x = -0.95*abs(boid.vel.x);
+    //    }
+    //    if(boid.pos.y >1)
+    //    {
+    //        boid.pos.y = 1;
+    //        boid.vel.y = -0.95*abs(boid.vel.y);
+    //    }
+
+    // handleCollisionWithBH(boid);
     boids_in[id] = boid;
 }
 

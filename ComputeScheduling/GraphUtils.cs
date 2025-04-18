@@ -2,15 +2,8 @@ namespace FluidsVulkan.ComputeScheduling;
 
 public class Tarjan<TNode>
 {
-    private Dictionary<TNode, NodeState> _statesBuffer =
-        new Dictionary<TNode, NodeState>();
-
-    private enum NodeState
-    {
-        White,
-        Gray,
-        Black
-    }
+    private readonly Dictionary<TNode, NodeState> _statesBuffer =
+        new();
 
     public bool TopologicalSort(
         List<TNode> nodes,
@@ -19,9 +12,7 @@ public class Tarjan<TNode>
     {
         _statesBuffer.Clear();
         foreach (var node in nodes)
-        {
             _statesBuffer.Add(node, NodeState.White);
-        }
 
         while (true)
         {
@@ -36,6 +27,7 @@ public class Tarjan<TNode>
                     getNeighbors))
                 return false;
         }
+
         return true;
     }
 
@@ -58,13 +50,20 @@ public class Tarjan<TNode>
         topSort.Add(node);
         return true;
     }
+
+    private enum NodeState
+    {
+        White,
+        Gray,
+        Black,
+    }
 }
 
 public class Kahn<TNode>
 {
     private readonly Dictionary<TNode, int> _degrees = new();
     private readonly Queue<TNode> _queue = new();
-   
+
     public bool TopologicalSort(
         List<TNode> nodes,
         Func<TNode, List<TNode>> getNeighbors,
@@ -76,14 +75,14 @@ public class Kahn<TNode>
             _degrees[node] = 0;
 
         foreach (var node in nodes)
-            foreach (var neigh in getNeighbors(node))
-                _degrees[neigh]++;
+        foreach (var neigh in getNeighbors(node))
+            _degrees[neigh]++;
 
         foreach (var node in nodes)
-            if(_degrees[node] == 0)
+            if (_degrees[node] == 0)
                 _queue.Enqueue(node);
 
-        while (_queue.Count >0)
+        while (_queue.Count > 0)
         {
             var current = _queue.Dequeue();
             topSort.Add(current);
@@ -91,11 +90,11 @@ public class Kahn<TNode>
             foreach (var node in getNeighbors(current))
             {
                 _degrees[node]--;
-                if(_degrees[node] == 0)
+                if (_degrees[node] == 0)
                     _queue.Enqueue(node);
             }
         }
-        
+
         topSort.Reverse();
         return topSort.Count == nodes.Count;
     }

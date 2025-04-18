@@ -99,7 +99,7 @@ public unsafe class VkSwapchainContext : IDisposable
             tmp3[0] = image;
             tmp3++;
         }
-        
+
         var presentInfo = new PresentInfoKHR
         {
             SType = StructureType.PresentInfoKhr,

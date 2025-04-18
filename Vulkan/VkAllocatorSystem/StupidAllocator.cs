@@ -2,7 +2,6 @@ using Silk.NET.Vulkan;
 
 namespace FluidsVulkan.Vulkan.VkAllocatorSystem;
 
-
 public class StupidAllocator : VkAllocator
 {
     private readonly HashSet<AllocationNode> _allocatedNodes = [];
@@ -10,8 +9,8 @@ public class StupidAllocator : VkAllocator
     private readonly PhysicalDeviceMemoryProperties _memoryProperties;
 
     private readonly List<int> _memoryTypesIndices;
+    private readonly MemoryPropertyFlags _requirredFlags;
     private readonly RwLock _rwlock = new();
-    private MemoryPropertyFlags _requirredFlags;
 
     public StupidAllocator(VkContext ctx,
         VkDevice device,
@@ -36,7 +35,7 @@ public class StupidAllocator : VkAllocator
                       preferredFlags));
             memoryTypesScores[i] = score;
         }
-        
+
         _memoryTypesIndices =
         [
             .. memoryTypesScores.OrderByDescending(z => z.Value)
@@ -79,7 +78,8 @@ public class StupidAllocator : VkAllocator
         }
 
         if (!success)
-            throw new Exception($"Failed to allocate memory with properties {_requirredFlags}");
+            throw new Exception(
+                $"Failed to allocate memory with properties {_requirredFlags}");
 
         var result = new AllocationNode(deviceMemory, 0);
         using (var writeLock = _rwlock.WriteLock())

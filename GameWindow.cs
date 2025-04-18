@@ -1,6 +1,5 @@
 using Autofac.Features.AttributeFilters;
 using FluidsVulkan.ComputeScheduling;
-using FluidsVulkan.FluidGPU;
 using FluidsVulkan.Vulkan;
 using FluidsVulkan.Vulkan.VkAllocatorSystem;
 using Silk.NET.Maths;
@@ -11,6 +10,7 @@ namespace FluidsVulkan;
 
 public sealed class GameWindow : IDisposable
 {
+    private const int FramesInFlight = 2;
     private readonly VkAllocator _allocator;
     private readonly VkCommandBuffer[] _buffers;
 
@@ -20,38 +20,36 @@ public sealed class GameWindow : IDisposable
 
     private readonly VkContext _ctx;
     private readonly VkDevice _device;
+    private readonly EventHandler _eventHandler;
     private readonly VkFence[] _fences;
 
     private readonly Format _format;
-
-    private const int FramesInFlight = 2;
     private readonly VkSemaphore[] _imageAvailableSemaphores;
 
 
     private readonly VkSemaphore[] _renderFinishedSemaphores;
     private readonly VkAllocator _stagingAllocator;
     private readonly VkSwapchainContext _swapchainCtx;
-
-    private bool _disposedValue;
-    private int _fps;
-    private int _frameIndex;
-    private VkSwapchain _swapchain;
-    private VkTexture _textureBuffer;
-    private VkImageView _textureBufferView;
-    private double _totalFrameTime;
-    private List<VkImageView> _views;
-    private WindowOptions _windowOptions;
     private readonly IWindow _window;
 
-    public VkImageView RenderTarget => _textureBufferView;
+    private VkCommandBuffer _computeBuffer;
+    private VkFence _computeFence;
 
-    public Extent2D WindowSize => new Extent2D(
-        _textureBuffer.Extent.Width, _textureBuffer.Extent.Height);
+    private bool _disposedValue;
 
+    private bool _firstRun = true;
 
-    public event Func<double, double, Task> OnUpdateAsync;
-    public event Action<double, double> OnUpdate;
-    public event Action<VkCommandRecordingScope, Rect2D> OnRender;
+    private bool _firstRunRender = true;
+    private int _fps;
+    private int _frameIndex;
+    private uint _imageIndex;
+    private VkSwapchain _swapchain;
+    private VkTexture _textureBuffer;
+    private double _totalFrameTime;
+
+    private double _totalTime;
+    private List<VkImageView> _views;
+    private WindowOptions _windowOptions;
 
     public GameWindow(
         VkContext ctx,
@@ -112,13 +110,23 @@ public sealed class GameWindow : IDisposable
             () => _ctx.Api.DeviceWaitIdle(_device.Device);
         _window.Resize += OnResize;
         _window.Update += x => Update(x).GetAwaiter().GetResult();
-        _window.Update += (x) => OnUpdate?.Invoke(x, _totalTime);
+        _window.Update += x => OnUpdate?.Invoke(x, _totalTime);
     }
+
+    public VkImageView RenderTarget { get; private set; }
+
+    public Extent2D WindowSize => new(
+        _textureBuffer.Extent.Width, _textureBuffer.Extent.Height);
 
     public void Dispose()
     {
         Dispose(true);
     }
+
+
+    public event Func<double, double, Task> OnUpdateAsync;
+    public event Action<double, double> OnUpdate;
+    public event Action<VkCommandRecordingScope, Rect2D> OnRender;
 
     private void Dispose(bool disposing)
     {
@@ -134,11 +142,12 @@ public sealed class GameWindow : IDisposable
 
             _computeFence.Dispose();
             _commandPool.Dispose();
-            _textureBufferView.Dispose();
+            RenderTarget.Dispose();
             _textureBuffer.Dispose();
             _swapchain.Dispose();
             _swapchainCtx.Dispose();
         }
+
         _disposedValue = true;
     }
 
@@ -182,7 +191,7 @@ public sealed class GameWindow : IDisposable
             var oldSwapchain = _swapchain;
             _swapchain = new VkSwapchain(_ctx, _ctx.Surface,
                 _swapchainCtx, [
-                    _device.FamilyIndex
+                    _device.FamilyIndex,
                 ], capabilities.MinImageCount + 1, _format,
                 _colorSpace,
                 new Extent2D((uint)_window.FramebufferSize.X,
@@ -206,7 +215,7 @@ public sealed class GameWindow : IDisposable
             ImageUsageFlags.TransferDstBit,
             SampleCountFlags.Count1Bit, SharingMode.Exclusive,
             _allocator);
-       
+
         _ctx.Api.QueueWaitIdle(_device.TransferQueue);
 
         var mapping = new ComponentMapping
@@ -226,7 +235,7 @@ public sealed class GameWindow : IDisposable
             LevelCount = 1,
         };
 
-        _textureBufferView = new VkImageView(_ctx, _device,
+        RenderTarget = new VkImageView(_ctx, _device,
             _textureBuffer.Image, mapping, subresourceRange);
     }
 
@@ -253,12 +262,6 @@ public sealed class GameWindow : IDisposable
             _views.Add(new VkImageView(_ctx, _device, image, mapping,
                 subresourceRange));
     }
-
-    private bool _firstRun = true;
-    private uint _imageIndex;
-
-    private double _totalTime;
-    private readonly EventHandler _eventHandler;
 
     public void Run()
     {
@@ -296,11 +299,11 @@ public sealed class GameWindow : IDisposable
         recording.PipelineBarrier(PipelineStageFlags.TopOfPipeBit,
             PipelineStageFlags.ColorAttachmentOutputBit,
             DependencyFlags.None, imageMemoryBarriers: [bb]);
-        
+
 
         OnRender?.Invoke(recording, scissor);
 
-        var region = new ImageBlit()
+        var region = new ImageBlit
         {
             SrcSubresource =
                 new ImageSubresourceLayers(
@@ -309,12 +312,13 @@ public sealed class GameWindow : IDisposable
                 new ImageSubresourceLayers(
                     ImageAspectFlags.ColorBit, 0, 0, 1),
         };
-        region.SrcOffsets[0] = new(0, 0, 0);
-        region.DstOffsets[0] = new(0, 0, 0);
-        region.SrcOffsets[1] = new(
+        region.SrcOffsets[0] = new Offset3D(0, 0, 0);
+        region.DstOffsets[0] = new Offset3D(0, 0, 0);
+        region.SrcOffsets[1] = new Offset3D(
             (int)_textureBuffer.Extent.Width,
             (int)_textureBuffer.Extent.Height, 1);
-        region.DstOffsets[1] = new((int)_swapchain.Extent.Width,
+        region.DstOffsets[1] = new Offset3D(
+            (int)_swapchain.Extent.Width,
             (int)_swapchain.Extent.Height, 1);
 
         VkImageMemoryBarrier[] barriers =
@@ -350,8 +354,8 @@ public sealed class GameWindow : IDisposable
             _swapchain.Images[imageIndex].Image,
             ImageLayout.TransferDstOptimal, [region],
             Filter.Linear);
-        
-        
+
+
         VkImageMemoryBarrier barrier2 = new()
         {
             NewLayout = ImageLayout.PresentSrcKhr,
@@ -371,10 +375,7 @@ public sealed class GameWindow : IDisposable
     {
         //_ctx.Api.DeviceWaitIdle(_device.Device);
         var oldSwapchain = _swapchain;
-        foreach (var view in _views)
-        {
-            view.Dispose();
-        }
+        foreach (var view in _views) view.Dispose();
 
         CreateSwapchain();
 
@@ -382,9 +383,6 @@ public sealed class GameWindow : IDisposable
 
         CreateViews();
     }
-
-    private VkCommandBuffer _computeBuffer;
-    private VkFence _computeFence;
 
     private async Task Update(double frameTime)
     {
@@ -408,7 +406,7 @@ public sealed class GameWindow : IDisposable
             _totalFrameTime = 0;
             _fps = 0;
         }
-        
+
         if (OnUpdateAsync != null)
             await OnUpdateAsync!.Invoke(frameTime, _totalTime);
         _computeBuffer.Reset(CommandBufferResetFlags
@@ -427,14 +425,14 @@ public sealed class GameWindow : IDisposable
         _totalTime += frameTime;
     }
 
-    private bool _firstRunRender = true;
     private void Render(double frameTime)
     {
         if (_firstRunRender)
         {
             _firstRunRender = false;
-            return; 
+            return;
         }
+
         _fences[_frameIndex].WaitFor().GetAwaiter().GetResult();
         if (_swapchain.AcquireNextImage(_device,
                 _imageAvailableSemaphores[_frameIndex],

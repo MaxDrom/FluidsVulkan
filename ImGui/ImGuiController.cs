@@ -6,7 +6,6 @@ using FluidsVulkan.Vulkan;
 using FluidsVulkan.Vulkan.Builders;
 using FluidsVulkan.Vulkan.VkAllocatorSystem;
 using ImGuiNET;
-using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 using Silk.NET.Windowing;
@@ -37,20 +36,20 @@ public struct ImGuiPushConstant
 public class ImGuiController : IDisposable
 {
     private readonly VkAllocator _allocator;
-    private readonly VkAllocator _stagingAllocator;
-    private VkTexture _fontTexture;
-    private VkImageView _fontImageView;
-    private VkSampler _fontSampler;
-    private readonly VkRenderPass _renderPass;
-    private readonly VkFrameBuffer _framebuffer;
+    private readonly IEditorComponent[] _components;
     private readonly VkDescriptorPool _descriptorPool;
-    private readonly VkBuffer<ImGuiVertex> _vertexBuffer;
-    private readonly VkMappedMemory<ImGuiVertex> _vertexMapped;
+    private readonly VkImageView _fontImageView;
+    private readonly VkSampler _fontSampler;
+    private readonly VkFrameBuffer _framebuffer;
+    private readonly GameWindow _gameWindow;
     private readonly VkBuffer<ushort> _indexBuffer;
     private readonly VkMappedMemory<ushort> _indexBufferMapped;
     private readonly VkGraphicsPipeline _pipeline;
-    private IEditorComponent[] _components;
-    private GameWindow _gameWindow;
+    private readonly VkRenderPass _renderPass;
+    private readonly VkAllocator _stagingAllocator;
+    private readonly VkBuffer<ImGuiVertex> _vertexBuffer;
+    private readonly VkMappedMemory<ImGuiVertex> _vertexMapped;
+    private VkTexture _fontTexture;
 
     public ImGuiController(VkContext ctx,
         VkDevice device,
@@ -64,7 +63,7 @@ public class ImGuiController : IDisposable
         IEditorComponent[] components)
     {
         ImGui.CreateContext();
-        IInputContext inputContext = eventHandler.InputContext;
+        var inputContext = eventHandler.InputContext;
         ImGui.StyleColorsClassic();
         _components = components;
 
@@ -108,7 +107,7 @@ public class ImGuiController : IDisposable
         gameWindow.OnUpdate += Update;
         _allocator = allocator;
         _stagingAllocator = stagingAllocator;
-        
+
 
         UploadFonts();
 
@@ -207,27 +206,28 @@ public class ImGuiController : IDisposable
             DstColorBlendFactor = BlendFactor.OneMinusSrcAlpha,
         };
 
-        DescriptorSetLayoutBinding fontAtlasBinding =
+        var fontAtlasBinding =
             new DescriptorSetLayoutBinding
             {
                 Binding = 0,
                 DescriptorType = DescriptorType.CombinedImageSampler,
                 DescriptorCount = 1,
                 StageFlags = ShaderStageFlags.FragmentBit,
-                PImmutableSamplers = null
+                PImmutableSamplers = null,
             };
 
         using var layout =
             new VkSetLayout(ctx, device, [fontAtlasBinding]);
 
         _descriptorPool = new VkDescriptorPool(ctx, device, [
-            new DescriptorPoolSize()
+            new DescriptorPoolSize
             {
                 DescriptorCount = 1,
-                Type = DescriptorType.CombinedImageSampler
-            }
+                Type = DescriptorType.CombinedImageSampler,
+            },
         ], 1);
-        var descriptorSet = _descriptorPool.AllocateDescriptors(layout, 1)[0];
+        var descriptorSet =
+            _descriptorPool.AllocateDescriptors(layout, 1)[0];
         new VkDescriptorSetUpdater(ctx, device)
             .AppendWrite(descriptorSet, 0,
                 DescriptorType.CombinedImageSampler,
@@ -270,6 +270,21 @@ public class ImGuiController : IDisposable
         _indexBufferMapped = _indexBuffer.Map(0, 128 * 1024);
     }
 
+    public void Dispose()
+    {
+        _fontSampler.Dispose();
+        _fontTexture.Dispose();
+        _fontImageView.Dispose();
+        _renderPass.Dispose();
+        _framebuffer.Dispose();
+        _descriptorPool.Dispose();
+        _vertexMapped.Dispose();
+        _vertexBuffer.Dispose();
+        _indexBufferMapped.Dispose();
+        _indexBuffer.Dispose();
+        _pipeline.Dispose();
+    }
+
     private void Update(double a, double b)
     {
         ImGui.GetIO().DeltaTime = (float)a;
@@ -292,7 +307,7 @@ public class ImGuiController : IDisposable
                 io.DisplaySize with
                 {
                     X = io.DisplaySize.X /
-                        Math.Max(3, _components.Length)
+                        Math.Max(3, _components.Length),
                 }, ImGuiCond.Once);
             ImGui.SetNextWindowPos(new Vector2(startPos, 0));
             ImGui.Begin(
@@ -312,14 +327,14 @@ public class ImGuiController : IDisposable
     {
         ImGui.Render();
         var drawData = ImGui.GetDrawData();
-        int fbWidth = (int)(drawData.DisplaySize.X *
+        var fbWidth = (int)(drawData.DisplaySize.X *
                             drawData.FramebufferScale.X);
-        int fbHeight = (int)(drawData.DisplaySize.Y *
+        var fbHeight = (int)(drawData.DisplaySize.Y *
                              drawData.FramebufferScale.Y);
 
         unsafe
         {
-            int offset = 0;
+            var offset = 0;
             for (var i = 0; i < drawData.CmdListsCount; i++)
             {
                 var cmdList = drawData.CmdLists[i];
@@ -328,9 +343,7 @@ public class ImGuiController : IDisposable
                     (ImGuiVertex*)cmdList.VtxBuffer.Data.ToPointer();
 
                 for (var k = 0; k < verticesLength; k++)
-                {
                     _vertexMapped[offset + k] = vertices[k];
-                }
 
                 offset += verticesLength;
             }
@@ -344,9 +357,7 @@ public class ImGuiController : IDisposable
                     (ushort*)cmdList.IdxBuffer.Data.ToPointer();
 
                 for (var k = 0; k < idxBufferSize; k++)
-                {
                     _indexBufferMapped[offset + k] = indices[k];
-                }
 
                 offset += idxBufferSize;
             }
@@ -359,7 +370,7 @@ public class ImGuiController : IDisposable
             Width = fbWidth,
             Height = fbHeight,
             MinDepth = 0.0f,
-            MaxDepth = 1.0f
+            MaxDepth = 1.0f,
         };
         recording.PipelineBarrier(
             PipelineStageFlags.TopOfPipeBit,
@@ -367,21 +378,21 @@ public class ImGuiController : IDisposable
             DependencyFlags.None,
             imageMemoryBarriers:
             [
-                new VkImageMemoryBarrier()
+                new VkImageMemoryBarrier
                 {
                     DstAccessMask = AccessFlags.ShaderReadBit,
                     Image = _fontTexture.Image,
                     NewLayout = ImageLayout.General,
                     SrcAccessMask = AccessFlags.None,
-                    SubresourceRange = new ImageSubresourceRange()
+                    SubresourceRange = new ImageSubresourceRange
                     {
                         AspectMask = ImageAspectFlags.ColorBit,
-                        BaseArrayLayer =  0,
+                        BaseArrayLayer = 0,
                         BaseMipLevel = 0,
                         LevelCount = 1,
-                        LayerCount = 1
-                    }
-                }
+                        LayerCount = 1,
+                    },
+                },
             ]);
         using var pass =
             recording.BeginRenderPass(_renderPass, _framebuffer,
@@ -394,7 +405,7 @@ public class ImGuiController : IDisposable
         recording.BindVertexBuffers(0, [_vertexBuffer], [0]);
         recording.BindIndexBuffer(_indexBuffer, 0,
             IndexType.Uint16);
-        var pushConstant = new ImGuiPushConstant()
+        var pushConstant = new ImGuiPushConstant
         {
             Scale = new Vector2D<float>(
                 2.0f / drawData.DisplaySize.X,
@@ -404,7 +415,7 @@ public class ImGuiController : IDisposable
                                     drawData.DisplayPos.X * 2.0f /
                                     drawData.DisplaySize.Y,
                     -1.0f - drawData.DisplayPos.Y * 2.0f /
-                    drawData.DisplaySize.X)
+                    drawData.DisplaySize.X),
         };
         recording.SetPushConstant(
             _pipeline,
@@ -425,7 +436,7 @@ public class ImGuiController : IDisposable
                         X = (int)(cmdBuffer.ClipRect.X *
                                   drawData.FramebufferScale.X),
                         Y = (int)(cmdBuffer.ClipRect.Y *
-                                  drawData.FramebufferScale.X)
+                                  drawData.FramebufferScale.X),
                     },
                     Extent = new Extent2D
                     {
@@ -434,8 +445,8 @@ public class ImGuiController : IDisposable
                                 (uint)drawData.FramebufferScale.X,
                         Height = (uint)(cmdBuffer.ClipRect.W -
                                         cmdBuffer.ClipRect.Y) *
-                                 (uint)drawData.FramebufferScale.X
-                    }
+                                 (uint)drawData.FramebufferScale.X,
+                    },
                 };
 
 
@@ -466,7 +477,7 @@ public class ImGuiController : IDisposable
         ImGui.GetIO().Fonts
             .GetTexDataAsRGBA32(out byte* pFonts, out var width,
                 out var height);
-        ulong uploadSize = (ulong)(width * height * 4);
+        var uploadSize = (ulong)(width * height * 4);
         var stagingBuffer = new VkBuffer<byte>(uploadSize,
             BufferUsageFlags.TransferSrcBit,
             SharingMode.Exclusive, _stagingAllocator);
@@ -479,16 +490,13 @@ public class ImGuiController : IDisposable
             ImageUsageFlags.TransferDstBit,
             SampleCountFlags.Count1Bit, SharingMode.Exclusive,
             _allocator);
-        
+
         using (var map = stagingBuffer.Map(0, uploadSize))
         {
-            for (ulong i = 0; i < uploadSize; i++)
-            {
-                map[i] = pFonts[i];
-            }
+            for (ulong i = 0; i < uploadSize; i++) map[i] = pFonts[i];
         }
 
-        var region = new BufferImageCopy()
+        var region = new BufferImageCopy
         {
             BufferImageHeight = 0,
             BufferRowLength = 0,
@@ -496,31 +504,16 @@ public class ImGuiController : IDisposable
             ImageExtent =
                 new Extent3D((uint)width, (uint)height, 1),
             ImageOffset = new Offset3D(0, 0, 0),
-            ImageSubresource = new ImageSubresourceLayers()
+            ImageSubresource = new ImageSubresourceLayers
             {
                 AspectMask = ImageAspectFlags.ColorBit,
                 BaseArrayLayer = 0,
                 LayerCount = 1,
-                MipLevel = 0
+                MipLevel = 0,
             },
         };
         ComputeScheduler.Instance.AddTask(
             new CopyBufferToImageTask(stagingBuffer,
                 _fontTexture.Image, [region]));
-    }
-
-    public void Dispose()
-    {
-        _fontSampler.Dispose();
-        _fontTexture.Dispose();
-        _fontImageView.Dispose();
-        _renderPass.Dispose();
-        _framebuffer.Dispose();
-        _descriptorPool.Dispose();
-        _vertexMapped.Dispose();
-        _vertexBuffer.Dispose();
-        _indexBufferMapped.Dispose();
-        _indexBuffer.Dispose();
-        _pipeline.Dispose();
     }
 }

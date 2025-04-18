@@ -71,18 +71,18 @@ void main()
             }
             ivec2 previos_cell_coords = getTexCoords(previos_cell);
             uint end_ind = min(imageLoad(prefixSum, cell).r, start_ind + maxSteps);
-            
+
             for (uint i = start_ind; i< end_ind; i++)
             {
                 Boid neign = boids_in[i];
                 vec2 dist = boid.pos-neign.pos;
                 float d = length(dist);
-                
+
                 if (d>=push.perceptionRadius)
                 continue;
 
                 density += SmoothFunction(push.perceptionRadius, d);
-                
+
             }
         }
     }

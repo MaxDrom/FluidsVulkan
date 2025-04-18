@@ -29,8 +29,8 @@ void main(void) {
     const uint steps = 11;
     uint iter = 0;
 
-    shared_data[id*2] = imageLoad(original,getTexCoords(push.offset+id*2)).r;
-    shared_data[id*2+1] = imageLoad(original,getTexCoords(push.offset+id*2+1)).r;
+    shared_data[id*2] = imageLoad(original, getTexCoords(push.offset+id*2)).r;
+    shared_data[id*2+1] = imageLoad(original, getTexCoords(push.offset+id*2+1)).r;
 
     barrier();
     memoryBarrierShared();
@@ -47,7 +47,7 @@ void main(void) {
         memoryBarrierShared();
     }
 
-    uint texOfffset =imageLoad(prefixSum,getTexCoords(push.offset-1)).r;
-    imageStore(prefixSum, getTexCoords(push.offset+id*2),uvec4(shared_data[id*2]+texOfffset, 0, 0, 0));
-    imageStore(prefixSum, getTexCoords(push.offset+id*2+1),uvec4(shared_data[id*2+1]+texOfffset, 0, 0, 0));
+    uint texOfffset =imageLoad(prefixSum, getTexCoords(push.offset-1)).r;
+    imageStore(prefixSum, getTexCoords(push.offset+id*2), uvec4(shared_data[id*2]+texOfffset, 0, 0, 0));
+    imageStore(prefixSum, getTexCoords(push.offset+id*2+1), uvec4(shared_data[id*2+1]+texOfffset, 0, 0, 0));
 }

@@ -166,7 +166,6 @@ public class VkContext : IDisposable
             ConsoleColor.Blue;
         if (copy.Trim().Length > 0)
         {
-
             if (colors.TryGetValue(severityFlags, out var color))
                 Console.ForegroundColor = color;
             Console.WriteLine(

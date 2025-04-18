@@ -41,8 +41,9 @@ public class VkSwapchain : IDisposable
             PresentMode = presentMode,
             Clipped = clipped,
         };
-        if(oldSwapchain != null)
-            swapchainCreateInfo.OldSwapchain = oldSwapchain._swapchain;
+        if (oldSwapchain != null)
+            swapchainCreateInfo.OldSwapchain =
+                oldSwapchain._swapchain;
         var hashSet = familyIndices.ToHashSet();
         unsafe
         {

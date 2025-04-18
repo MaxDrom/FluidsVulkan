@@ -26,7 +26,8 @@ public abstract class VkAllocator(VkContext ctx,
     private bool _disposedValue;
     protected MemoryHeapFlags PreferredFlags = preferredFlags;
 
-    protected MemoryPropertyFlags RequiredProperties = requiredProperties;
+    protected MemoryPropertyFlags RequiredProperties =
+        requiredProperties;
 
     public VkContext Ctx { get; } = ctx;
 

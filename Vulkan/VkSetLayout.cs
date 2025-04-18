@@ -67,13 +67,16 @@ public class VkSetLayout : IDisposable
         unsafe
         {
             var bindings = typeof(T).GetProperties()
-                .Select(z => z.GetCustomAttribute<UniformDescriptionAttribute>())
+                .Select(z =>
+                    z.GetCustomAttribute<
+                        UniformDescriptionAttribute>())
                 .Where(z => z != null)
                 .Select(descriptor => new DescriptorSetLayoutBinding
                 {
                     Binding = (uint)descriptor.Binding,
                     DescriptorType = descriptor.DescriptorType,
-                    DescriptorCount = (uint)descriptor.DescriptorCount,
+                    DescriptorCount =
+                        (uint)descriptor.DescriptorCount,
                     StageFlags = descriptor.ShaderStageFlags,
                     PImmutableSamplers = null,
                 })

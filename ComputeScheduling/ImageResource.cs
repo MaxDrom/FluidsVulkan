@@ -3,12 +3,13 @@ using Silk.NET.Vulkan;
 
 namespace FluidsVulkan.ComputeScheduling;
 
-public class ImageResource : IComputeResource, IEquatable<ImageResource>
+public class ImageResource : IComputeResource,
+    IEquatable<ImageResource>
 {
     public VkImage Image { get; init; }
     public AccessFlags AccessFlags { get; init; }
     public ImageLayout Layout { get; init; }
-    
+
     public bool IsOverlap(IComputeResource other)
     {
         if (other is ImageResource otherImageResource)
@@ -21,16 +22,16 @@ public class ImageResource : IComputeResource, IEquatable<ImageResource>
         return visitor.Visit(this);
     }
 
+    public bool Equals(IComputeResource other)
+    {
+        return Equals(other as ImageResource);
+    }
+
     public bool Equals(ImageResource other)
     {
         if (other is null) return false;
         if (ReferenceEquals(this, other)) return true;
         return Image.Equals(other.Image);
-    }
-
-    public bool Equals(IComputeResource other)
-    {
-        return Equals(other as ImageResource);
     }
 
     public override bool Equals(object obj)
@@ -46,12 +47,14 @@ public class ImageResource : IComputeResource, IEquatable<ImageResource>
         return Image.GetHashCode();
     }
 
-    public static bool operator ==(ImageResource left, ImageResource right)
+    public static bool operator ==(ImageResource left,
+        ImageResource right)
     {
         return Equals(left, right);
     }
 
-    public static bool operator !=(ImageResource left, ImageResource right)
+    public static bool operator !=(ImageResource left,
+        ImageResource right)
     {
         return !Equals(left, right);
     }

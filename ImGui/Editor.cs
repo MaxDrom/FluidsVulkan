@@ -1,9 +1,8 @@
-using System.Numerics;
 using System.Reflection;
+using ImGuiNET;
 
 namespace FluidsVulkan.ImGui;
 
-using ImGuiNET;
 using ImGui = ImGuiNET.ImGui;
 
 public interface IParametrized
@@ -19,45 +18,46 @@ public interface IEditorComponent
 
 public class Editor : IEditorComponent
 {
-    private Dictionary<object, PropertyInfo[]> _properties;
+    private readonly Dictionary<object, PropertyInfo[]> _properties;
 
-    private Dictionary<PropertyInfo, (IRefLikeProperty, ImGuiAttribute
+    private readonly Dictionary<PropertyInfo, (IRefLikeProperty,
+        ImGuiAttribute
         )> _refs;
 
-    private Guid _guid = Guid.NewGuid();
-    public Guid Guid => _guid;
-    public string Name => "Objects Properties";
     public Editor(IParametrized[] parametrizedEntities)
     {
-        
         _properties = parametrizedEntities.Select(z => ((object)z,
             z.GetType().GetProperties()
                 .Where(u =>
                     u.GetCustomAttribute<ImGuiAttribute>() != null)
                 .ToArray())).ToDictionary();
-        _refs = new Dictionary<PropertyInfo, (IRefLikeProperty, ImGuiAttribute)>();
-        foreach (var (_,properties) in _properties)
-        {
-            foreach (var prop in properties)
-            {
-                _refs[prop] = (null, prop.GetCustomAttribute<ImGuiAttribute>()!);
-            }
-        }
+        _refs =
+            new Dictionary<PropertyInfo, (IRefLikeProperty,
+                ImGuiAttribute)>();
+        foreach (var (_, properties) in _properties)
+        foreach (var prop in properties)
+            _refs[prop] = (null,
+                prop.GetCustomAttribute<ImGuiAttribute>()!);
     }
+
+    public Guid Guid { get; } = Guid.NewGuid();
+
+    public string Name => "Objects Properties";
 
     public void UpdateGui()
     {
         var vx = ImGui.GetContentRegionAvail();
-        
-        float dy = vx.Y/_properties.Count;
+
+        var dy = vx.Y / _properties.Count;
         foreach (var (obj, properties) in _properties)
         {
-            ImGui.BeginChild($"###{obj}", vx with { Y = dy },ImGuiChildFlags.Borders|ImGuiChildFlags.FrameStyle);
+            ImGui.BeginChild($"###{obj}", vx with { Y = dy },
+                ImGuiChildFlags.Borders | ImGuiChildFlags.FrameStyle);
             var name = obj.GetType().Name;
             var wrapL = "###    ";
             var wrapR = "    ###";
-            
-            ImGui.Text(wrapL+name+wrapR);
+
+            ImGui.Text(wrapL + name + wrapR);
             foreach (var property in properties)
             {
                 var (refProp, attr) = _refs[property];
@@ -69,9 +69,8 @@ public class Editor : IEditorComponent
                     attr);
                 ImGui.Separator();
             }
-            
+
             ImGui.EndChild();
         }
-        
     }
 }

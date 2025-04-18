@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using FluidsVulkan.Vulkan;
 using Silk.NET.Vulkan;
 
@@ -7,6 +8,15 @@ public class ComputeScheduler
 {
     private static readonly Lock SyncRoot = new();
     private static ComputeScheduler _instance;
+
+
+    private readonly ComputeRecorder _computeRecorder = new();
+
+    private readonly DependencyGraphBuilder _dependencyGraphBuilder =
+        new();
+
+    private readonly Kahn<IGpuTask> _graphUtils = new();
+    private readonly List<IGpuTask> _topological = new();
 
     public static ComputeScheduler Instance
     {
@@ -22,44 +32,34 @@ public class ComputeScheduler
             return _instance;
         }
     }
-
-    private readonly DependencyGraphBuilder _dependencyGraphBuilder =
-        new();
-
-
-    private ComputeRecorder _computeRecorder = new();
-
+    private ConcurrentQueue<IGpuTask> _tasks = new();
     public void AddTask(IComputeTask task)
     {
-        _dependencyGraphBuilder.AddTask(task);
+        _tasks.Enqueue(task);
     }
-
-    private Kahn<IGpuTask> _graphUtils = new();
-    private List<IGpuTask> _topological = new();
 
     public async Task RecordAll(
         VkCommandRecordingScope scope)
     {
-        // Console.WriteLine(_dependencyGraphBuilder.Tasks.Count);
-        // // var neigbours = _dependencyGraphBuilder.Tasks
-        // //     .AsParallel()
-        // //     .Select(
-        // //         z => (z, _dependencyGraphBuilder.GetNeighbours(z)))
-        // //     .ToDictionary(z => z.Item1, z => z.Item2);
-        // //
-        // // ///var neighbours = await Task.WhenAll(tasks);
         _topological.Clear();
-        var neigbours = _dependencyGraphBuilder.BuildGraph();
-        var topological =
+        foreach (var task in _tasks)
+            _dependencyGraphBuilder.AddTask(task);
+        var neighbours = _dependencyGraphBuilder.BuildGraph();
+        var noCycles = await Task.Run(() =>
             _graphUtils.TopologicalSort(
                 _dependencyGraphBuilder.Tasks,
                 z =>
-                    neigbours[z], _topological);
-        
+                    neighbours[z], _topological));
+
+#if DEBUG
+        if (!noCycles)
+            throw new Exception("Compute graph has cycles.");
+#endif
+
         _computeRecorder.Record(scope,
-            _topological);
+            _dependencyGraphBuilder.Tasks);
         _dependencyGraphBuilder.Clear();
-        
+        _tasks.Clear();
     }
 }
 
@@ -67,15 +67,84 @@ public class ComputeRecorder :
     IComputeResourceVisitor<(BufferMemoryBarrier?,
         VkImageMemoryBarrier?)>
 {
-    private Dictionary<IVkBuffer, AccessFlags>
+    private readonly Dictionary<IVkBuffer, AccessFlags>
         _bufferAccessFlags = [];
 
-    private Dictionary<VkImage, (AccessFlags, ImageLayout)>
+    private readonly Dictionary<VkImage, (AccessFlags, ImageLayout)>
         _imageAccessFlags =
             [];
 
     private PipelineStageFlags _pipelineStage =
         PipelineStageFlags.TopOfPipeBit;
+
+    public (BufferMemoryBarrier?, VkImageMemoryBarrier?) Visit(
+        BufferResource resource)
+    {
+        var buffer = resource.Buffer;
+        if (!_bufferAccessFlags.TryGetValue(buffer,
+                out var srcAccessFlag))
+        {
+            _bufferAccessFlags[buffer] = resource.AccessFlags;
+            return (null, null);
+        }
+
+        if (srcAccessFlag == AccessFlags.ShaderReadBit &&
+            resource.AccessFlags == AccessFlags.ShaderReadBit)
+            return (null, null);
+
+        var bufferMemoryBarrier = new BufferMemoryBarrier
+        {
+            Buffer = buffer.Buffer,
+            DstAccessMask = resource.AccessFlags,
+            SrcAccessMask =
+                CheckSupport(_pipelineStage, srcAccessFlag)
+                    ? AccessFlags.None
+                    : srcAccessFlag,
+            Offset = 0,
+            SType = StructureType.BufferMemoryBarrier,
+            Size = buffer.Size,
+        };
+
+        _bufferAccessFlags[buffer] = resource.AccessFlags;
+
+        return (bufferMemoryBarrier, null);
+    }
+
+    public (BufferMemoryBarrier?, VkImageMemoryBarrier?) Visit(
+        ImageResource resource)
+    {
+        var image = resource.Image;
+        if (!_imageAccessFlags.TryGetValue(image,
+                out var val))
+        {
+            _imageAccessFlags[image] = (AccessFlags.None,
+                image.LastLayout);
+            val = _imageAccessFlags[image];
+        }
+
+        var (srcAccessFlags, srcLayout) = val;
+        if (srcAccessFlags == AccessFlags.ShaderReadBit &&
+            resource.AccessFlags == AccessFlags.ShaderReadBit &&
+            srcLayout == resource.Layout)
+            return (null, null);
+        var imageMemoryBarrier = new VkImageMemoryBarrier
+        {
+            Image = image,
+            DstAccessMask = resource.AccessFlags,
+            SrcAccessMask =
+                CheckSupport(_pipelineStage, srcAccessFlags)
+                    ? AccessFlags.None
+                    : srcAccessFlags,
+            NewLayout = resource.Layout,
+            SubresourceRange = new ImageSubresourceRange(
+                ImageAspectFlags.ColorBit,
+                0, 1, 0, 1),
+        };
+
+        _imageAccessFlags[image] =
+            (resource.AccessFlags, resource.Layout);
+        return (null, imageMemoryBarrier);
+    }
 
     public void Record(VkCommandRecordingScope scope,
         List<IGpuTask> tasks)
@@ -117,49 +186,14 @@ public class ComputeRecorder :
 
             if (bufferBarriers.Count > 0 || imageBarriers.Count > 0 ||
                 task.PipelineStage != _pipelineStage)
-            {
                 scope.PipelineBarrier(_pipelineStage,
                     task.PipelineStage,
                     DependencyFlags.None,
                     bufferMemoryBarriers: [.. bufferBarriers],
                     imageMemoryBarriers: [.. imageBarriers]);
-            }
 
             _pipelineStage = task.InvokeRecord(scope);
         }
-    }
-
-    public (BufferMemoryBarrier?, VkImageMemoryBarrier?) Visit(
-        BufferResource resource)
-    {
-        var buffer = resource.Buffer;
-        if (!_bufferAccessFlags.TryGetValue(buffer,
-                out var srcAccessFlag))
-        {
-            _bufferAccessFlags[buffer] = resource.AccessFlags;
-            return (null, null);
-        }
-
-        if (srcAccessFlag == AccessFlags.ShaderReadBit &&
-            resource.AccessFlags == AccessFlags.ShaderReadBit)
-            return (null, null);
-
-        var bufferMemoryBarrier = new BufferMemoryBarrier()
-        {
-            Buffer = buffer.Buffer,
-            DstAccessMask = resource.AccessFlags,
-            SrcAccessMask =
-                CheckSupport(_pipelineStage, srcAccessFlag)
-                    ? AccessFlags.None
-                    : srcAccessFlag,
-            Offset = 0,
-            SType = StructureType.BufferMemoryBarrier,
-            Size = buffer.Size
-        };
-
-        _bufferAccessFlags[buffer] = resource.AccessFlags;
-
-        return (bufferMemoryBarrier, null);
     }
 
     private static bool CheckSupport(
@@ -172,43 +206,7 @@ public class ComputeRecorder :
             PipelineStageFlags.TransferBit => accessFlags is
                 AccessFlags.TransferReadBit
                 or AccessFlags.TransferWriteBit,
-            _ => true
+            _ => true,
         };
-    }
-
-    public (BufferMemoryBarrier?, VkImageMemoryBarrier?) Visit(
-        ImageResource resource)
-    {
-        var image = resource.Image;
-        if (!_imageAccessFlags.TryGetValue(image,
-                out var val))
-        {
-            _imageAccessFlags[image] = (AccessFlags.None,
-                image.LastLayout);
-            val = _imageAccessFlags[image];
-        }
-
-        var (srcAccessFlags, srcLayout) = val;
-        if (srcAccessFlags == AccessFlags.ShaderReadBit &&
-            resource.AccessFlags == AccessFlags.ShaderReadBit &&
-            srcLayout == resource.Layout)
-            return (null, null);
-        var imageMemoryBarrier = new VkImageMemoryBarrier()
-        {
-            Image = image,
-            DstAccessMask = resource.AccessFlags,
-            SrcAccessMask =
-                CheckSupport(_pipelineStage, srcAccessFlags)
-                    ? AccessFlags.None
-                    : srcAccessFlags,
-            NewLayout = resource.Layout,
-            SubresourceRange = new ImageSubresourceRange(
-                ImageAspectFlags.ColorBit,
-                0, 1, 0, 1)
-        };
-
-        _imageAccessFlags[image] =
-            (resource.AccessFlags, resource.Layout);
-        return (null, imageMemoryBarrier);
     }
 }

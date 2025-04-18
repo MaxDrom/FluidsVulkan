@@ -22,7 +22,7 @@ layout(binding=2, r32ui) uniform uimage2D bucketSizes;
 layout(binding=3, r32ui) readonly uniform uimage2D prefixSum;
 
 layout(push_constant) uniform PushConstants {
-   uint bufferLength;
+    uint bufferLength;
 }push;
 
 ivec2 imSize = imageSize(prefixSum);
@@ -35,12 +35,12 @@ void main()
     uint id = gl_GlobalInvocationID.x;
     if (id>=push.bufferLength)
     return;
- 
+
     Boid tmp = boids_in[id];
-    ivec2 grid_id = posmod(ivec2(floor(tmp.pos*(imSize-ivec2(1)))),imSize);
+    ivec2 grid_id = posmod(ivec2(floor(tmp.pos*(imSize-ivec2(1)))), imSize);
     uint inBucketIndex = imageAtomicAdd(bucketSizes, grid_id, -1);
     uint particleIdx = imageLoad(prefixSum, grid_id).r-inBucketIndex;
-    
+
     boids_out[particleIdx] = tmp;
 }
 

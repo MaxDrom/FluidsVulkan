@@ -3,16 +3,16 @@ using Silk.NET.Vulkan;
 
 namespace FluidsVulkan.Vulkan;
 
-
 public class VkImage
 {
-    public ImageLayout LastLayout { get; internal set; }
     public VkImage(Image image, Format format, ImageType type)
     {
         Image = image;
         Format = format;
         Type = type;
     }
+
+    public ImageLayout LastLayout { get; internal set; }
 
     public Image Image { get; }
 
@@ -28,8 +28,8 @@ public class VkTexture : IDisposable
     private readonly VkDevice _device;
     private readonly AllocationNode _node;
     private bool _disposedValue;
-    
-    
+
+
     public unsafe VkTexture(ImageType imageType,
         Extent3D extent,
         uint mipLevels,

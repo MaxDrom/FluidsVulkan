@@ -23,7 +23,24 @@ public struct PushConstant
 
 public sealed class FluidView : IDisposable, IParametrized
 {
+    private readonly VkCommandPool _commandPoolTransfer;
+    private readonly VkCommandBuffer _copyBuffer;
+    private readonly VkFence _copyFence;
+    private readonly VkContext _ctx;
+    private readonly VkDevice _device;
+    private readonly Extent2D _extent;
+    private readonly double _fixedUpdateInterval = 1 / 60.0;
+    private readonly IParticleSystem _fluidEngine;
+    private readonly VkFrameBuffer _framebuffer;
+    private readonly VkGraphicsPipeline _graphicsPipeline;
+    private readonly VkBuffer<uint> _indexBuffer;
     private readonly uint[] _indices = [0, 1, 2, 2, 3, 0];
+
+    private readonly VkBuffer<Fluid> _instanceBuffer;
+
+    private readonly VkRenderPass _renderPass;
+    private readonly VkAllocator _stagingAllocator;
+    private readonly VkBuffer<Vertex> _vertexBuffer;
 
     private readonly Vertex[] _vertices =
     [
@@ -52,67 +69,9 @@ public sealed class FluidView : IDisposable, IParametrized
         },
     ];
 
-    private readonly VkRenderPass _renderPass;
-    private VkContext _ctx;
-    private VkDevice _device;
-    private readonly VkGraphicsPipeline _graphicsPipeline;
-
-    private VkBuffer<Fluid> _instanceBuffer;
-    private readonly VkBuffer<Vertex> _vertexBuffer;
-    private readonly VkBuffer<uint> _indexBuffer;
-    private readonly VkCommandPool _commandPoolTransfer;
-    private readonly VkCommandBuffer _copyBuffer;
-    private VkAllocator _stagingAllocator;
-    private VkFrameBuffer _framebuffer;
-    private VkFence _copyFence;
-
-
-    public float Scale
-    {
-        get => _scale;
-        set
-        {
-            _scale = value;
-            if (_scale <= 0)
-                _scale = 0.001f;
-        }
-    }
-
     private float _scale = 1f;
-
-    public Vector2D<float> BoxCenter
-    {
-        get => _boxCenter;
-        set => _boxCenter = value;
-    }
-
-    private Vector2D<float> _boxCenter = new(0.5f, 0.5f);
-    private readonly Extent2D _extent;
-    private readonly IParticleSystem _fluidEngine;
     private Vector2 _tempMinMax = new(5, 30);
-    private double _fixedUpdateInterval = 1 / 60.0;
     private double _timeFromFixedUpdate;
-
-    [SliderFloat2("Colormap min max", -1000,
-        1000, "%.1f", ImGuiSliderFlags.Logarithmic)]
-    public Vector2 TempMinMax
-    {
-        get => _tempMinMax;
-        set
-        {
-            _tempMinMax = value;
-            if (_tempMinMax.X > _tempMinMax.Y)
-                _tempMinMax.X = _tempMinMax.Y;
-        }
-    }
-
-    [SliderFloat("Simulation Speed", 0f, 5.0f, "%.1f")]
-    public float SimulationSpeed { get; set; } = 1f;
-
-
-    [Combo("Color map visualization target",
-        ["Density", "Pressure", "Velocity"])]
-    public int VisualisationIndex { get; set; }
 
     public FluidView(VkContext ctx,
         VkDevice device,
@@ -203,28 +162,78 @@ public sealed class FluidView : IDisposable, IParametrized
             allocator);
     }
 
+
+    public float Scale
+    {
+        get => _scale;
+        set
+        {
+            _scale = value;
+            if (_scale <= 0)
+                _scale = 0.001f;
+        }
+    }
+
+    public Vector2D<float> BoxCenter { get; set; } = new(0.5f, 0.5f);
+
+    [SliderFloat2("Colormap min max", -1000,
+        1000, "%.1f", ImGuiSliderFlags.Logarithmic)]
+    public Vector2 TempMinMax
+    {
+        get => _tempMinMax;
+        set
+        {
+            _tempMinMax = value;
+            if (_tempMinMax.X > _tempMinMax.Y)
+                _tempMinMax.X = _tempMinMax.Y;
+        }
+    }
+
+    [SliderFloat("Simulation Speed", 0f, 5.0f, "%.1f")]
+    public float SimulationSpeed { get; set; } = 1f;
+
+
+    [Combo("Color map visualization target",
+        ["Density", "Pressure", "Velocity"])]
+    public int VisualisationIndex { get; set; }
+
+
+    public void Dispose()
+    {
+        _graphicsPipeline.Dispose();
+        _instanceBuffer.Dispose();
+        _vertexBuffer.Dispose();
+        _indexBuffer.Dispose();
+        _commandPoolTransfer.Dispose();
+        _framebuffer.Dispose();
+        _renderPass.Dispose();
+        _copyFence.Dispose();
+    }
+
     public void RecordDraw(
         VkCommandRecordingScope recording,
         Rect2D scissor)
     {
-        var viewport = new Viewport()
+        var viewport = new Viewport
         {
             X = 0,
             Y = 0,
             Width = _extent.Width,
-            Height = _extent.Height
+            Height = _extent.Height,
         };
         using var renderRecording =
             recording.BeginRenderPass(_renderPass,
                 _framebuffer, scissor);
         recording.BindPipeline(_graphicsPipeline);
 
-        var pushConstant = new PushConstant()
+        var pushConstant = new PushConstant
         {
             xrange =
-                new Vector2D<float>(BoxCenter.X-Scale/2, BoxCenter.X + Scale/2),
+                new Vector2D<float>(BoxCenter.X - Scale / 2,
+                    BoxCenter.X + Scale / 2),
             yrange =
-                new Vector2D<float>(BoxCenter.Y-Scale/2, BoxCenter.Y + Scale/2),
+                new Vector2D<float>(BoxCenter.Y - Scale / 2,
+                    BoxCenter.Y + Scale / 2),
             minMax =
                 new Vector2D<float>(_tempMinMax.X, _tempMinMax.Y),
             visualizationIndex = VisualisationIndex,
@@ -245,7 +254,7 @@ public sealed class FluidView : IDisposable, IParametrized
     public async Task Update(double frameTime, double totalTime)
     {
         _timeFromFixedUpdate += frameTime;
-        for (int step = 0;
+        for (var step = 0;
              step < 1 && _timeFromFixedUpdate >= _fixedUpdateInterval;
              step++)
         {
@@ -348,18 +357,5 @@ public sealed class FluidView : IDisposable, IParametrized
         _copyBuffer.Submit(_device.TransferQueue, VkFence.NullHandle,
             [], []);
         _ctx.Api.QueueWaitIdle(_device.TransferQueue);
-    }
-
-
-    public void Dispose()
-    {
-        _graphicsPipeline.Dispose();
-        _instanceBuffer.Dispose();
-        _vertexBuffer.Dispose();
-        _indexBuffer.Dispose();
-        _commandPoolTransfer.Dispose();
-        _framebuffer.Dispose();
-        _renderPass.Dispose();
-        _copyFence.Dispose();
     }
 }

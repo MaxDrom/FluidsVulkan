@@ -43,13 +43,13 @@ float remap(float val)
 float array[3] = float[3] (remap(density), remap(length(instanceOffset)), remap(pressure));
 void main() {
     vec2 dpos = vec2((push.xrange.y - push.xrange.x), (push.yrange.y - push.yrange.x));
-    
+
     vec2 pos = vec2(instancePos.x -push.xrange.x, instancePos.y - push.yrange.x)/dpos*2.0+vec2(-1, -1);
-    
-    
+
+
     vec2 newPos = inPosition*0.001f/dpos + pos;
-    
+
     gl_Position = vec4(newPos, 0.0, 1.0);
-    fragColor = vec4(temperatureGradient(array[push.visualizationIndex]),1);
+    fragColor = vec4(temperatureGradient(array[push.visualizationIndex]), 1);
     uv = inPosition;
 }

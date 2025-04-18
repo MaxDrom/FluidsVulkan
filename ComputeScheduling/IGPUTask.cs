@@ -7,11 +7,12 @@ public interface IGpuTask
 {
     List<IComputeResource> Reads { get; }
     List<IComputeResource> Writes { get; }
-    
-    PipelineStageFlags InvokeRecord(VkCommandRecordingScope scope);
-    
+
     PipelineStageFlags PipelineStage { get; }
+
+    PipelineStageFlags InvokeRecord(VkCommandRecordingScope scope);
 }
 
 public interface IComputeTask : IGpuTask
-{}
+{
+}

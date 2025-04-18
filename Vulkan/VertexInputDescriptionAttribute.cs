@@ -40,7 +40,9 @@ public interface IVertexData<TSelf>
 }
 
 [AttributeUsage(AttributeTargets.Field)]
-public class VertexInputDescriptionAttribute(int location, Format format)
+public class VertexInputDescriptionAttribute(int location,
+    Format format
+)
     : Attribute
 {
     public int Location { get; init; } = location;

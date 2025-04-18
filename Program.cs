@@ -2,16 +2,15 @@
 using Autofac;
 using Autofac.Features.AttributeFilters;
 using Autofac.Integration.Mef;
-using FluidsVulkan.ComputeScheduling;
 using FluidsVulkan.FluidGPU;
 using FluidsVulkan.ImGui;
 using FluidsVulkan.Vulkan;
 using FluidsVulkan.Vulkan.VkAllocatorSystem;
 using Silk.NET.Core.Native;
-using Silk.NET.Windowing;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 using Silk.NET.Vulkan.Extensions.KHR;
+using Silk.NET.Windowing;
 
 namespace FluidsVulkan;
 
@@ -45,14 +44,14 @@ internal class Program
             var phi = random.NextDouble() * Math.PI;
             var r = random.NextDouble() * 0.4 + 0.1;
             var force = 0.005 / (r * r);
-            var speed = 0.1;// * Math.Sqrt(force * r);
+            var speed = 0.1; // * Math.Sqrt(force * r);
             var position = new Vector2D<float>((float)Math.Cos(phi),
                                (float)Math.Sin(phi)) * (float)r +
                            new Vector2D<float>(0.5f, 0.5f);
             var velocity = new Vector2D<float>((float)Math.Sin(phi),
                 -(float)Math.Cos(phi)) * (float)speed;
 
-            instances[i] = new Fluid()
+            instances[i] = new Fluid
             {
                 position = position,
                 velocity = velocity,
@@ -80,8 +79,8 @@ internal class Program
             .As<IEditorComponent>();
 
         var container = builder.Build();
-       // ComputeScheduler.SetupInstance(container.Resolve<VkContext>(),
-         //   container.Resolve<VkDevice>());
+        // ComputeScheduler.SetupInstance(container.Resolve<VkContext>(),
+        //   container.Resolve<VkDevice>());
 
         var gameWindow = container.Resolve<GameWindow>();
         _ = container.Resolve<FluidView>();
@@ -149,10 +148,10 @@ internal class Program
                 }
 
             builder.RegisterInstance(
-                    new DisplayFormat()
+                    new DisplayFormat
                     {
                         Format = format, ColorSpace = colorSpace,
-                        WindowOptions = windowOptions
+                        WindowOptions = windowOptions,
                     })
                 .SingleInstance();
         }
@@ -165,9 +164,9 @@ internal class Program
             .WithParameter("physicalDevice", physicalDevice)
             .WithParameter("enabledLayersNames", new List<string>())
             .WithParameter("enabledExtensionsNames",
-                new List<string>()
+                new List<string>
                 {
-                    KhrSwapchain.ExtensionName
+                    KhrSwapchain.ExtensionName,
                 })
             .SingleInstance();
 

@@ -133,7 +133,7 @@ void main() {
         }
     }
     //debugPrintfEXT("%f", length(force));
-//    boid.pressure = Pressure(boid.density);
+    //    boid.pressure = Pressure(boid.density);
     force += push.viscosityMult*averageVel*length(averageVel);// - 2*boid.vel*length(boid.vel);
     //debugPrintfEXT("%f", boid.density);
     boid.vel += force/boid.density*push.delta+forceToBlackHole(boid.pos)*push.delta;

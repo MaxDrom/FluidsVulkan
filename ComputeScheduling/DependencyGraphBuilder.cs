@@ -2,14 +2,15 @@ namespace FluidsVulkan.ComputeScheduling;
 
 public class DependencyGraphBuilder
 {
+    private readonly Dictionary<ulong, IGpuTask> _lastWriter = [];
+
+    private readonly Dictionary<IGpuTask, List<IGpuTask>> _negbours =
+        [];
+
+    private readonly Dictionary<ulong, List<IGpuTask>> _readers = [];
+
+    private readonly ResourceHasher _resourceHasher = new();
     public List<IGpuTask> Tasks { get; } = [];
-
-    private Dictionary<ulong, IGpuTask> _lastWriter = [];
-    private Dictionary<ulong, List<IGpuTask>> _readers = [];
-
-    private Dictionary<IGpuTask, List<IGpuTask>> _negbours = [];
-
-    private ResourceHasher _resourceHasher = new();
 
     public void AddTask(IGpuTask task)
     {
@@ -21,25 +22,23 @@ public class DependencyGraphBuilder
             if (_readers.TryGetValue(id, out var readers))
             {
                 foreach (var reader in readers)
-                {
                     _negbours[task].Add(reader);
-                }
                 _readers.Clear();
             }
 
-            if(_lastWriter.TryGetValue(id, out var lastWriter))
+            if (_lastWriter.TryGetValue(id, out var lastWriter))
                 _negbours[task].Add(lastWriter);
-            
+
             _lastWriter[id] = task;
-            
         }
-        
+
         foreach (var resource in task.Reads)
         {
             var id = resource.Accept(_resourceHasher);
-            if(_lastWriter.TryGetValue(id, out var lastWriter) && lastWriter != task)
+            if (_lastWriter.TryGetValue(id, out var lastWriter) &&
+                lastWriter != task)
                 _negbours[task].Add(lastWriter);
-            if(!_readers.ContainsKey(id))
+            if (!_readers.ContainsKey(id))
                 _readers[id] = new List<IGpuTask>();
             _readers[id].Add(task);
         }
@@ -55,6 +54,7 @@ public class DependencyGraphBuilder
         Tasks.Clear();
         _readers.Clear();
         _lastWriter.Clear();
+        _negbours.Clear();
     }
 }
 

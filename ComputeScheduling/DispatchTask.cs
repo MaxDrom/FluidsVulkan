@@ -6,13 +6,13 @@ namespace FluidsVulkan.ComputeScheduling;
 
 public readonly struct DispatchTask : IComputeTask
 {
-    
     public IDispatchExecutor Executor { get; init; }
     public List<IComputeResource> Reads { get; init; }
     public List<IComputeResource> Writes { get; init; }
 
 
-    public PipelineStageFlags InvokeRecord(VkCommandRecordingScope scope)
+    public PipelineStageFlags InvokeRecord(
+        VkCommandRecordingScope scope)
     {
         Executor.RecordDispatch(scope);
         return PipelineStageFlags.ComputeShaderBit;

@@ -18,12 +18,12 @@ public class FluidController
             [Key.A] = new Vector2D<float>(-1, 0),
             [Key.D] = new Vector2D<float>(1, 0),
         };
-        eventHandler.OnMouseScrolled += (delta) =>
+        eventHandler.OnMouseScrolled += delta =>
         {
-            view1.Scale += 0.1f*delta;
+            view1.Scale += 0.1f * delta;
         };
 
-        eventHandler.OnKeyPressed += (key) =>
+        eventHandler.OnKeyPressed += key =>
         {
             if (directions.TryGetValue(key, out var direction))
                 view1.BoxCenter += Speed * direction;

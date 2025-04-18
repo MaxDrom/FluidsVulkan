@@ -7,7 +7,9 @@ public struct FillBufferTask : IComputeTask
 {
     public List<IComputeResource> Reads { get; }
     public List<IComputeResource> Writes { get; }
-    public PipelineStageFlags InvokeRecord(VkCommandRecordingScope scope)
+
+    public PipelineStageFlags InvokeRecord(
+        VkCommandRecordingScope scope)
     {
         throw new NotImplementedException();
     }

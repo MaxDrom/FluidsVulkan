@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using FluidsVulkan.Vulkan;
 using Silk.NET.Vulkan;
 
@@ -9,8 +8,14 @@ internal sealed class PrefixSumGPU(VkContext ctx,
 )
     : IDisposable
 {
-    private readonly ComputeShader<uint> _computeShader = new(ctx, device,
+    private readonly ComputeShader<uint> _computeShader = new(ctx,
+        device,
         "shader_objects/prefixSum.comp.spv");
+
+    public void Dispose()
+    {
+        _computeShader.Dispose();
+    }
 
     public void RecordBuffer(VkImageView source,
         VkImageView destination,
@@ -28,10 +33,5 @@ internal sealed class PrefixSumGPU(VkContext ctx,
             _computeShader.SetPushConstant(offset);
             _computeShader.Dispatch(1, 1, 1);
         }
-    }
-
-    public void Dispose()
-    {
-        _computeShader.Dispose();
     }
 }

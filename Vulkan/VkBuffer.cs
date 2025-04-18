@@ -63,7 +63,7 @@ public class VkBuffer<T> : IVkBuffer, IDisposable
         _ctx = allocator.Ctx;
         _device = allocator.Device;
         _allocator = allocator;
-        Size = size;// length * (ulong)Marshal.SizeOf<T>();
+        Size = size; // length * (ulong)Marshal.SizeOf<T>();
         unsafe
         {
             var createInfo = new BufferCreateInfo
@@ -71,7 +71,7 @@ public class VkBuffer<T> : IVkBuffer, IDisposable
                 SType = StructureType.BufferCreateInfo,
                 Size = Size,
                 Usage = usage,
-                SharingMode = sharingMode
+                SharingMode = sharingMode,
             };
 
             if (_ctx.Api.CreateBuffer(_device.Device, ref createInfo,
@@ -87,8 +87,6 @@ public class VkBuffer<T> : IVkBuffer, IDisposable
         }
     }
 
-    public ulong Size { get; }
-
     public DeviceMemory Memory => _node.Memory;
 
     public void Dispose()
@@ -96,6 +94,8 @@ public class VkBuffer<T> : IVkBuffer, IDisposable
         Dispose(true);
         GC.SuppressFinalize(this);
     }
+
+    public ulong Size { get; }
 
     public Buffer Buffer => _buffer;
 

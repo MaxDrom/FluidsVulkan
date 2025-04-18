@@ -4,7 +4,8 @@ using Silk.NET.Vulkan;
 
 namespace FluidsVulkan.Vulkan;
 
-public sealed unsafe class VkMappedMemory<T> : IDisposable, IEnumerable<T>
+public sealed unsafe class VkMappedMemory<T> : IDisposable,
+    IEnumerable<T>
     where T : unmanaged
 {
     private readonly VkContext _ctx;
@@ -13,10 +14,7 @@ public sealed unsafe class VkMappedMemory<T> : IDisposable, IEnumerable<T>
     private readonly T* _memoryPointer;
 
     private bool _disposedValue;
-    public int Count()
-    {
-        return (int)Length;
-    }
+
     public VkMappedMemory(VkContext ctx,
         VkDevice device,
         DeviceMemory memoryToMap,
@@ -36,7 +34,7 @@ public sealed unsafe class VkMappedMemory<T> : IDisposable, IEnumerable<T>
             sizeInBytes, flags, &tmp);
         _memoryPointer = (T*)tmp;
     }
-    
+
     public VkMappedMemory(VkContext ctx,
         VkDevice device,
         DeviceMemory memoryToMap,
@@ -47,7 +45,7 @@ public sealed unsafe class VkMappedMemory<T> : IDisposable, IEnumerable<T>
         _ctx = ctx;
         _device = device;
         _memory = memoryToMap;
-        Length = size/(ulong)sizeof(T);
+        Length = size / (ulong)sizeof(T);
         var offsetInBytes = offset;
         var sizeInBytes = size;
         void* tmp;
@@ -100,6 +98,22 @@ public sealed unsafe class VkMappedMemory<T> : IDisposable, IEnumerable<T>
         GC.SuppressFinalize(this);
     }
 
+    public IEnumerator<T> GetEnumerator()
+    {
+        for (var i = 0; (ulong)i < Length; i++)
+            yield return this[i];
+    }
+
+    IEnumerator IEnumerable.GetEnumerator()
+    {
+        return GetEnumerator();
+    }
+
+    public int Count()
+    {
+        return (int)Length;
+    }
+
     private void Dispose(bool disposing)
     {
         if (!_disposedValue)
@@ -107,17 +121,6 @@ public sealed unsafe class VkMappedMemory<T> : IDisposable, IEnumerable<T>
             _ctx.Api.UnmapMemory(_device.Device, _memory);
             _disposedValue = true;
         }
-    }
-
-    public IEnumerator<T> GetEnumerator()
-    {
-        for(int i = 0; (ulong)i < Length; i++)
-            yield return this[i];
-    }
-
-    IEnumerator IEnumerable.GetEnumerator()
-    {
-        return GetEnumerator();
     }
 
     ~VkMappedMemory()

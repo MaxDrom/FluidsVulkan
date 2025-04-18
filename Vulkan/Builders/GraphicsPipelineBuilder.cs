@@ -243,7 +243,8 @@ public sealed class GraphicsPipelineBuilder
             using var vertexInputStateCreateInfo =
                 new VkVertexInputStateCreateInfo(
                     _scope._vertexInputBindingDescriptions.ToArray(),
-                    _scope._vertexInputAttributeDescriptions.ToArray());
+                    _scope._vertexInputAttributeDescriptions
+                        .ToArray());
 
             if (_scope._sampleMask != null)
             {

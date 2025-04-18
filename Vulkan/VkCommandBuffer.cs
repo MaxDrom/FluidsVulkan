@@ -37,7 +37,7 @@ public class VkCommandBuffer(VkContext ctx,
             {
                 SType = StructureType.CommandBufferBeginInfo,
                 Flags = flags,
-                PInheritanceInfo = &inheritanceInfo
+                PInheritanceInfo = &inheritanceInfo,
             };
 
 
@@ -135,7 +135,7 @@ public class VkCommandRecordingScope : IDisposable
                 PClearValues = &clearValue,
                 RenderArea = renderArea,
                 Framebuffer = framebuffer.Framebuffer,
-                RenderPass = renderPass.RenderPass
+                RenderPass = renderPass.RenderPass,
             };
             _ctx.Api.CmdBeginRenderPass(_buffer.Buffer,
                 in renderPassInfo, SubpassContents.Inline);
@@ -199,13 +199,16 @@ public class VkCommandRecordingScope : IDisposable
         }
     }
 
-    public void ExecuteCommands(ReadOnlySpan<VkCommandBuffer> commandBuffers)
+    public void ExecuteCommands(
+        ReadOnlySpan<VkCommandBuffer> commandBuffers)
     {
-        Span<CommandBuffer> cmdBuffers = stackalloc CommandBuffer[commandBuffers.Length];
+        Span<CommandBuffer> cmdBuffers =
+            stackalloc CommandBuffer[commandBuffers.Length];
         for (var i = 0; i < cmdBuffers.Length; i++)
             cmdBuffers[i] = commandBuffers[i].Buffer;
         _ctx.Api.CmdExecuteCommands(_buffer.Buffer, cmdBuffers);
     }
+
     public void PipelineBarrier(PipelineStageFlags srcStageFlags,
         PipelineStageFlags dstStageFlags,
         DependencyFlags dependencyFlags,
@@ -215,27 +218,26 @@ public class VkCommandRecordingScope : IDisposable
         ReadOnlySpan<VkImageMemoryBarrier> imageMemoryBarriers =
             default)
     {
-        Span<ImageMemoryBarrier> trueMemoryBarriers = stackalloc ImageMemoryBarrier[imageMemoryBarriers.Length];
-        for(var i = 0; i < imageMemoryBarriers.Length; i++)
+        Span<ImageMemoryBarrier> trueMemoryBarriers =
+            stackalloc ImageMemoryBarrier[imageMemoryBarriers.Length];
+        for (var i = 0; i < imageMemoryBarriers.Length; i++)
         {
             var imageBarrier = imageMemoryBarriers[i];
-                trueMemoryBarriers[i] = new ImageMemoryBarrier()
-                {
-                    SType = StructureType.ImageMemoryBarrier,
-                    DstAccessMask = imageBarrier.DstAccessMask,
-                    SrcAccessMask = imageBarrier.SrcAccessMask,
-                    SubresourceRange = imageBarrier.SubresourceRange,
-                    Image = imageBarrier.Image.Image,
-                    OldLayout = imageBarrier.Image.LastLayout,
-                    NewLayout = imageBarrier.NewLayout
-                };
+            trueMemoryBarriers[i] = new ImageMemoryBarrier
+            {
+                SType = StructureType.ImageMemoryBarrier,
+                DstAccessMask = imageBarrier.DstAccessMask,
+                SrcAccessMask = imageBarrier.SrcAccessMask,
+                SubresourceRange = imageBarrier.SubresourceRange,
+                Image = imageBarrier.Image.Image,
+                OldLayout = imageBarrier.Image.LastLayout,
+                NewLayout = imageBarrier.NewLayout,
+            };
         }
 
         foreach (var imageBarrier in imageMemoryBarriers)
-        {
             imageBarrier.Image.LastLayout =
                 imageBarrier.NewLayout;
-        }
 
 
         _ctx.Api.CmdPipelineBarrier(
@@ -243,7 +245,7 @@ public class VkCommandRecordingScope : IDisposable
             dstStageFlags, dependencyFlags,
             memoryBarriers,
             bufferMemoryBarriers,
-             trueMemoryBarriers);
+            trueMemoryBarriers);
     }
 
     public void BindIndexBuffer(IVkBuffer buffer,

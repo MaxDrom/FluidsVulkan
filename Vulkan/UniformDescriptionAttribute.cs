@@ -13,7 +13,9 @@ public class UniformDescriptionAttribute(int binding,
 
     public int DescriptorCount { get; set; } = descriptorCount;
 
-    public ShaderStageFlags ShaderStageFlags { get; set; } = shaderStageFlags;
+    public ShaderStageFlags ShaderStageFlags { get; set; } =
+        shaderStageFlags;
 
-    public DescriptorType DescriptorType { get; set; } = descriptorType;
+    public DescriptorType DescriptorType { get; set; } =
+        descriptorType;
 }

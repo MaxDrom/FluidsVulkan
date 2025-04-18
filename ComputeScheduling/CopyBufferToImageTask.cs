@@ -11,23 +11,25 @@ public readonly struct CopyBufferToImageTask(IVkBuffer buffer,
 {
     public List<IComputeResource> Reads { get; } =
     [
-        new BufferResource()
+        new BufferResource
         {
             AccessFlags = AccessFlags.TransferReadBit,
             Buffer = buffer,
-        }
+        },
     ];
+
     public List<IComputeResource> Writes { get; } =
     [
-        new ImageResource()
+        new ImageResource
         {
             AccessFlags = AccessFlags.TransferWriteBit,
             Image = image,
-            Layout = ImageLayout.TransferDstOptimal
-        }
+            Layout = ImageLayout.TransferDstOptimal,
+        },
     ];
 
-    public PipelineStageFlags InvokeRecord(VkCommandRecordingScope scope)
+    public PipelineStageFlags InvokeRecord(
+        VkCommandRecordingScope scope)
     {
         scope.CopyBufferToImage(buffer, image, [.. regions]);
         return PipelineStageFlags.TransferBit;
