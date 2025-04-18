@@ -2,6 +2,7 @@
 using Autofac;
 using Autofac.Features.AttributeFilters;
 using Autofac.Integration.Mef;
+using FluidsVulkan.ComputeScheduling;
 using FluidsVulkan.FluidGPU;
 using FluidsVulkan.ImGui;
 using FluidsVulkan.Vulkan;
@@ -22,7 +23,6 @@ public class DisplayFormat
     public WindowOptions WindowOptions { get; set; }
 }
 
-
 internal class Program
 {
     private static void Main(string[] args)
@@ -37,19 +37,20 @@ internal class Program
         windowOptions.WindowState = WindowState.Maximized;
         var window = Window.Create(windowOptions);
         //
-        var numberOfParticles = 512*1024;
+        var numberOfParticles = 256 * 1024;
         var instances = new Fluid[numberOfParticles];
         var random = new Random();
         for (var i = 0; i < numberOfParticles; i++)
         {
-            var phi = random.NextDouble() * Math.PI ;
-            var r = random.NextDouble()*0.4+0.1;
-            var force = 0.005/ (r * r );
-            var speed =0.8*Math.Sqrt(force * r);
+            var phi = random.NextDouble() * Math.PI;
+            var r = random.NextDouble() * 0.4 + 0.1;
+            var force = 0.005 / (r * r);
+            var speed = 0.1;// * Math.Sqrt(force * r);
             var position = new Vector2D<float>((float)Math.Cos(phi),
-                (float)Math.Sin(phi))*(float)r+new Vector2D<float>(0.5f, 0.5f);
+                               (float)Math.Sin(phi)) * (float)r +
+                           new Vector2D<float>(0.5f, 0.5f);
             var velocity = new Vector2D<float>((float)Math.Sin(phi),
-                -(float)Math.Cos(phi))*(float)speed;
+                -(float)Math.Cos(phi)) * (float)speed;
 
             instances[i] = new Fluid()
             {
@@ -59,29 +60,39 @@ internal class Program
         }
 
         var builder = new ContainerBuilder();
-        
+
         InitVulkan(builder, window, windowOptions);
-        
-        builder.RegisterType<FluidEngineGpu>().As<IParticleSystem>().As<IParametrized>()
-            .WithParameter("initialData", instances).WithAttributeFiltering().SingleInstance();
-        builder.RegisterType<FluidView>().AsSelf().As<IParametrized>().WithAttributeFiltering().SingleInstance();
-        builder.RegisterType<FluidController>().AsSelf().WithAttributeFiltering()
+
+        builder.RegisterType<FluidEngineGpu>().As<IParticleSystem>()
+            .As<IParametrized>()
+            .WithParameter("initialData", instances)
+            .WithAttributeFiltering().SingleInstance();
+        builder.RegisterType<FluidView>().AsSelf().As<IParametrized>()
+            .WithAttributeFiltering().SingleInstance();
+        builder.RegisterType<FluidController>().AsSelf()
+            .WithAttributeFiltering()
             .SingleInstance();
-        builder.RegisterType<EventHandler>().WithAttributeFiltering().AsSelf().SingleInstance();
-        builder.RegisterType<ImGuiController>().WithAttributeFiltering().AsSelf().SingleInstance();
-        builder.RegisterType<Editor>().WithAttributeFiltering().As<IEditorComponent>();
+        builder.RegisterType<EventHandler>().WithAttributeFiltering()
+            .AsSelf().SingleInstance();
+        builder.RegisterType<ImGuiController>()
+            .WithAttributeFiltering().AsSelf().SingleInstance();
+        builder.RegisterType<Editor>().WithAttributeFiltering()
+            .As<IEditorComponent>();
+
         var container = builder.Build();
+       // ComputeScheduler.SetupInstance(container.Resolve<VkContext>(),
+         //   container.Resolve<VkDevice>());
+
         var gameWindow = container.Resolve<GameWindow>();
         _ = container.Resolve<FluidView>();
         _ = container.Resolve<FluidController>();
         _ = container.Resolve<ImGuiController>();
-        
-        
+
+
         gameWindow.Run();
 
-        
+
         container.Dispose();
-        
     }
 
     private static void InitVulkan(ContainerBuilder builder,
@@ -102,9 +113,9 @@ internal class Program
             extensions = new string[count];
             SilkMarshal.CopyPtrToStringArray((nint)pp, extensions);
         }
-        
+
         builder.RegisterInstance(window).SingleInstance();
-       
+
         var ctx
             = new VkContext(window, extensions);
         var physicalDevice = ctx.Api
@@ -159,7 +170,7 @@ internal class Program
                     KhrSwapchain.ExtensionName
                 })
             .SingleInstance();
-       
+
 
         builder.RegisterType<StupidAllocator>().As<VkAllocator>()
             .WithMetadata("Type", "DeviceLocal")
@@ -167,7 +178,7 @@ internal class Program
                 MemoryPropertyFlags.None)
             .WithParameter("preferredFlags",
                 MemoryHeapFlags.DeviceLocalBit).SingleInstance();
-        
+
         builder.RegisterType<StupidAllocator>().As<VkAllocator>()
             .WithMetadata("Type", "HostVisible")
             .WithParameter("requiredProperties",
@@ -177,6 +188,7 @@ internal class Program
                 MemoryHeapFlags.None).SingleInstance();
         builder.RegisterMetadataRegistrationSources();
 
-        builder.RegisterType<GameWindow>().WithAttributeFiltering().AsSelf().SingleInstance();
+        builder.RegisterType<GameWindow>().WithAttributeFiltering()
+            .AsSelf().SingleInstance();
     }
 }

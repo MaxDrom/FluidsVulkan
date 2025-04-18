@@ -246,7 +246,7 @@ public sealed class FluidView : IDisposable, IParametrized
     {
         _timeFromFixedUpdate += frameTime;
         for (int step = 0;
-             step < 2 && _timeFromFixedUpdate >= _fixedUpdateInterval;
+             step < 1 && _timeFromFixedUpdate >= _fixedUpdateInterval;
              step++)
         {
             await _fluidEngine.Update(

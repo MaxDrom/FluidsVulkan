@@ -408,8 +408,7 @@ public sealed class GameWindow : IDisposable
             _totalFrameTime = 0;
             _fps = 0;
         }
-
-
+        
         if (OnUpdateAsync != null)
             await OnUpdateAsync!.Invoke(frameTime, _totalTime);
         _computeBuffer.Reset(CommandBufferResetFlags

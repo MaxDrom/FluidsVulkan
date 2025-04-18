@@ -2,60 +2,71 @@ namespace FluidsVulkan.ComputeScheduling;
 
 public class DependencyGraphBuilder
 {
-    private readonly Dictionary<IComputeTask, int> _taskIds = new();
+    public List<IGpuTask> Tasks { get; } = [];
 
+    private Dictionary<ulong, IGpuTask> _lastWriter = [];
+    private Dictionary<ulong, List<IGpuTask>> _readers = [];
 
-    public List<IComputeTask> Tasks { get; } = [];
+    private Dictionary<IGpuTask, List<IGpuTask>> _negbours = [];
 
-    public void AddTask(IComputeTask task)
+    private ResourceHasher _resourceHasher = new();
+
+    public void AddTask(IGpuTask task)
     {
         Tasks.Add(task);
-        _taskIds[task] = Tasks.Count - 1;
-    }
-    
-    public IEnumerable<IComputeTask> GetNeighbours(IComputeTask task)
-    {
-        var i = _taskIds[task];
-        
-        for (var j = i + 1; j < Tasks.Count; j++)
+        _negbours[task] = new List<IGpuTask>();
+        foreach (var resource in task.Writes)
         {
-            if (FindOverlap(Tasks[i], Tasks[j]))
-                yield return Tasks[j];
+            var id = resource.Accept(_resourceHasher);
+            if (_readers.TryGetValue(id, out var readers))
+            {
+                foreach (var reader in readers)
+                {
+                    _negbours[task].Add(reader);
+                }
+                _readers.Clear();
+            }
+
+            if(_lastWriter.TryGetValue(id, out var lastWriter))
+                _negbours[task].Add(lastWriter);
+            
+            _lastWriter[id] = task;
+            
+        }
+        
+        foreach (var resource in task.Reads)
+        {
+            var id = resource.Accept(_resourceHasher);
+            if(_lastWriter.TryGetValue(id, out var lastWriter) && lastWriter != task)
+                _negbours[task].Add(lastWriter);
+            if(!_readers.ContainsKey(id))
+                _readers[id] = new List<IGpuTask>();
+            _readers[id].Add(task);
         }
     }
 
-    private bool FindOverlap(
-        IComputeTask task1,
-        IComputeTask task2)
+    public Dictionary<IGpuTask, List<IGpuTask>> BuildGraph()
     {
-        foreach (var resourceRead in task1.Reads)
-        foreach (var resourceWrite in task2.Writes)
-            if (resourceRead.IsOverlap(resourceWrite))
-            {
-                return true;
-            }
-
-
-        foreach (var resourceRead in task1.Writes)
-        foreach (var resourceWrite in task2.Reads)
-            if (resourceRead.IsOverlap(resourceWrite))
-            {
-                return true;
-            }
-
-
-        foreach (var resourceRead in task1.Writes)
-        foreach (var resourceWrite in task2.Writes)
-            if (resourceRead.IsOverlap(resourceWrite))
-            {
-                return true;
-            }
-        
-        return false;
+        return _negbours;
     }
 
     public void Clear()
     {
         Tasks.Clear();
+        _readers.Clear();
+        _lastWriter.Clear();
+    }
+}
+
+public class ResourceHasher : IComputeResourceVisitor<ulong>
+{
+    public ulong Visit(BufferResource resource)
+    {
+        return resource.Buffer.Buffer.Handle;
+    }
+
+    public ulong Visit(ImageResource resource)
+    {
+        return resource.Image.Image.Handle;
     }
 }

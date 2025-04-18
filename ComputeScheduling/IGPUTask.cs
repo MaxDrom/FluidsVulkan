@@ -3,7 +3,7 @@ using Silk.NET.Vulkan;
 
 namespace FluidsVulkan.ComputeScheduling;
 
-public interface IComputeTask
+public interface IGpuTask
 {
     List<IComputeResource> Reads { get; }
     List<IComputeResource> Writes { get; }
@@ -12,3 +12,6 @@ public interface IComputeTask
     
     PipelineStageFlags PipelineStage { get; }
 }
+
+public interface IComputeTask : IGpuTask
+{}

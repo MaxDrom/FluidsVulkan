@@ -199,6 +199,13 @@ public class VkCommandRecordingScope : IDisposable
         }
     }
 
+    public void ExecuteCommands(ReadOnlySpan<VkCommandBuffer> commandBuffers)
+    {
+        Span<CommandBuffer> cmdBuffers = stackalloc CommandBuffer[commandBuffers.Length];
+        for (var i = 0; i < cmdBuffers.Length; i++)
+            cmdBuffers[i] = commandBuffers[i].Buffer;
+        _ctx.Api.CmdExecuteCommands(_buffer.Buffer, cmdBuffers);
+    }
     public void PipelineBarrier(PipelineStageFlags srcStageFlags,
         PipelineStageFlags dstStageFlags,
         DependencyFlags dependencyFlags,

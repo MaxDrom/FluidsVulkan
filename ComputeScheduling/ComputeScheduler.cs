@@ -16,34 +16,50 @@ public class ComputeScheduler
                 return _instance;
             lock (SyncRoot)
             {
-                _instance = new ComputeScheduler();
+                _instance ??= new ComputeScheduler();
             }
 
             return _instance;
         }
     }
 
-    private DependencyGraphBuilder _dependencyGraphBuilder =
-        new DependencyGraphBuilder();
+    private readonly DependencyGraphBuilder _dependencyGraphBuilder =
+        new();
 
 
-    private ComputeRecorder _computeRecorder = new ComputeRecorder();
+    private ComputeRecorder _computeRecorder = new();
 
     public void AddTask(IComputeTask task)
     {
         _dependencyGraphBuilder.AddTask(task);
     }
 
-    public async Task RecordAll(
-        VkCommandRecordingScope recordingScope)
-    {
-        var topologicalSortOrder = await Task.Run(() =>
-            GraphUtils.TopologicalSort(_dependencyGraphBuilder.Tasks,
-                _dependencyGraphBuilder.GetNeighbours));
+    private Kahn<IGpuTask> _graphUtils = new();
+    private List<IGpuTask> _topological = new();
 
-        _computeRecorder.Record(recordingScope,
-            topologicalSortOrder);
+    public async Task RecordAll(
+        VkCommandRecordingScope scope)
+    {
+        // Console.WriteLine(_dependencyGraphBuilder.Tasks.Count);
+        // // var neigbours = _dependencyGraphBuilder.Tasks
+        // //     .AsParallel()
+        // //     .Select(
+        // //         z => (z, _dependencyGraphBuilder.GetNeighbours(z)))
+        // //     .ToDictionary(z => z.Item1, z => z.Item2);
+        // //
+        // // ///var neighbours = await Task.WhenAll(tasks);
+        _topological.Clear();
+        var neigbours = _dependencyGraphBuilder.BuildGraph();
+        var topological =
+            _graphUtils.TopologicalSort(
+                _dependencyGraphBuilder.Tasks,
+                z =>
+                    neigbours[z], _topological);
+        
+        _computeRecorder.Record(scope,
+            _topological);
         _dependencyGraphBuilder.Clear();
+        
     }
 }
 
@@ -51,7 +67,6 @@ public class ComputeRecorder :
     IComputeResourceVisitor<(BufferMemoryBarrier?,
         VkImageMemoryBarrier?)>
 {
-
     private Dictionary<IVkBuffer, AccessFlags>
         _bufferAccessFlags = [];
 
@@ -63,19 +78,20 @@ public class ComputeRecorder :
         PipelineStageFlags.TopOfPipeBit;
 
     public void Record(VkCommandRecordingScope scope,
-        List<IComputeTask> tasks)
+        List<IGpuTask> tasks)
     {
         _pipelineStage = PipelineStageFlags.TopOfPipeBit;
         _bufferAccessFlags.Clear();
         _imageAccessFlags.Clear();
-        //_scope = scope;
+
         var bufferBarriers = new List<BufferMemoryBarrier>();
         var imageBarriers = new List<VkImageMemoryBarrier>();
-        var hashset = new HashSet<IComputeResource>();
-        
+        var hashset =
+            new HashSet<IComputeResource>(bufferBarriers.Count +
+                                          imageBarriers.Count);
+
         foreach (var task in tasks)
         {
-            //Console.WriteLine(task);
             bufferBarriers.Clear();
             imageBarriers.Clear();
             hashset.Clear();
@@ -127,37 +143,39 @@ public class ComputeRecorder :
         if (srcAccessFlag == AccessFlags.ShaderReadBit &&
             resource.AccessFlags == AccessFlags.ShaderReadBit)
             return (null, null);
-        var srcAccessMask =
-            CheckSupport(_pipelineStage, srcAccessFlag)
-                ? AccessFlags.None
-                : srcAccessFlag;
+
         var bufferMemoryBarrier = new BufferMemoryBarrier()
         {
             Buffer = buffer.Buffer,
             DstAccessMask = resource.AccessFlags,
-            SrcAccessMask = srcAccessMask,
+            SrcAccessMask =
+                CheckSupport(_pipelineStage, srcAccessFlag)
+                    ? AccessFlags.None
+                    : srcAccessFlag,
             Offset = 0,
             SType = StructureType.BufferMemoryBarrier,
             Size = buffer.Size
         };
-        
+
         _bufferAccessFlags[buffer] = resource.AccessFlags;
 
         return (bufferMemoryBarrier, null);
     }
 
-    private bool CheckSupport(PipelineStageFlags pipelineStageFlags, AccessFlags accessFlags)
+    private static bool CheckSupport(
+        PipelineStageFlags pipelineStageFlags,
+        AccessFlags accessFlags)
     {
-        switch (pipelineStageFlags)
+        return pipelineStageFlags switch
         {
-            case PipelineStageFlags.TopOfPipeBit:
-                return false;
-            case PipelineStageFlags.TransferBit:
-                return accessFlags is AccessFlags.TransferReadBit or AccessFlags.TransferWriteBit;
-            default:
-                return true;
-        }
+            PipelineStageFlags.TopOfPipeBit => false,
+            PipelineStageFlags.TransferBit => accessFlags is
+                AccessFlags.TransferReadBit
+                or AccessFlags.TransferWriteBit,
+            _ => true
+        };
     }
+
     public (BufferMemoryBarrier?, VkImageMemoryBarrier?) Visit(
         ImageResource resource)
     {
@@ -180,7 +198,7 @@ public class ComputeRecorder :
             Image = image,
             DstAccessMask = resource.AccessFlags,
             SrcAccessMask =
-                _pipelineStage == PipelineStageFlags.TopOfPipeBit
+                CheckSupport(_pipelineStage, srcAccessFlags)
                     ? AccessFlags.None
                     : srcAccessFlags,
             NewLayout = resource.Layout,

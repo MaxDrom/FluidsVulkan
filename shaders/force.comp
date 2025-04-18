@@ -76,7 +76,7 @@ vec2 forceToBlackHole(vec2 pos) {
     float r = max(length(toBlackHole), 0.01);
     if (d < 0.00001)
     return vec2(0);
-    return 0.005*normalize(toBlackHole)/(r*r);
+    return 0.01*normalize(toBlackHole)/(r*r);
 }
 
 void main() {
