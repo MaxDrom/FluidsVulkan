@@ -122,7 +122,7 @@ public class ImGuiController : IDisposable
 
         _fontSampler = new VkSampler(ctx, device,
             SamplerCreateFlags.None, Filter.Linear, Filter.Linear,
-            SamplerMipmapMode.Nearest);
+            SamplerMipmapMode.Linear);
 
 
         var imageInfo = new DescriptorImageInfo(_fontSampler.Sampler,

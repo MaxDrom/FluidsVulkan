@@ -33,7 +33,7 @@ public sealed class GameWindow : IDisposable
     private readonly IWindow _window;
 
     private VkCommandBuffer _computeBuffer;
-    private VkFence _computeFence;
+    private VkSemaphore _updateFinishedSemaphore;
 
     private bool _disposedValue;
 
@@ -50,6 +50,7 @@ public sealed class GameWindow : IDisposable
     private double _totalTime;
     private List<VkImageView> _views;
     private WindowOptions _windowOptions;
+    private VkFence _updateFence;
 
     public GameWindow(
         VkContext ctx,
@@ -140,7 +141,8 @@ public sealed class GameWindow : IDisposable
             foreach (var sem in _renderFinishedSemaphores)
                 sem.Dispose();
 
-            _computeFence.Dispose();
+            _updateFence.Dispose();
+            _updateFinishedSemaphore.Dispose();
             _commandPool.Dispose();
             RenderTarget.Dispose();
             _textureBuffer.Dispose();
@@ -149,12 +151,6 @@ public sealed class GameWindow : IDisposable
         }
 
         _disposedValue = true;
-    }
-
-    private void CleanUpSwapchain()
-    {
-        foreach (var image in _views) image.Dispose();
-        _swapchain.Dispose();
     }
 
     private void CreateSwapchain()
@@ -379,10 +375,15 @@ public sealed class GameWindow : IDisposable
 
     private async Task Update(double frameTime)
     {
+        
         _eventHandler.Update();
         if (_firstRun)
         {
-            _computeFence = new VkFence(_ctx, _device);
+            _updateFence = new VkFence(_ctx, _device);
+            //_updateFence.Reset();
+            _updateFinishedSemaphore = new VkSemaphore(_ctx, _device);
+            _updateFinishedSemaphore.Flag =
+                PipelineStageFlags.ComputeShaderBit;
             _computeBuffer =
                 _commandPool.AllocateBuffers(
                     CommandBufferLevel.Primary, 1)[0];
@@ -391,6 +392,8 @@ public sealed class GameWindow : IDisposable
             return;
         }
 
+        await _updateFence.WaitFor();
+        _updateFence.Reset();
         _totalFrameTime += frameTime;
         _fps++;
         if (_totalFrameTime >= 1)
@@ -410,11 +413,8 @@ public sealed class GameWindow : IDisposable
         {
             await ComputeScheduler.Instance.RecordAll(recording);
         }
-
-        _computeFence.Reset();
-        _computeBuffer.Submit(_device.ComputeQueue, _computeFence, [],
-            []);
-        await _computeFence.WaitFor();
+        _computeBuffer.Submit(_device.ComputeQueue, _updateFence, [],
+            [_updateFinishedSemaphore]);
         _totalTime += frameTime;
     }
 
@@ -437,7 +437,7 @@ public sealed class GameWindow : IDisposable
         RecordBuffer(_buffers[_frameIndex], (int)_imageIndex);
         _buffers[_frameIndex].Submit(_device.GraphicsQueue,
             _fences[_frameIndex],
-            [_imageAvailableSemaphores[_frameIndex]],
+            [_updateFinishedSemaphore,_imageAvailableSemaphores[_frameIndex]],
             [_renderFinishedSemaphores[_frameIndex]]);
         _swapchainCtx.QueuePresent(_device.PresentQueue,
             [_imageIndex],

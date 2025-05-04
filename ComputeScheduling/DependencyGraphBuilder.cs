@@ -4,10 +4,10 @@ public class DependencyGraphBuilder
 {
     private readonly Dictionary<ulong, IGpuTask> _lastWriter = [];
 
-    private readonly Dictionary<IGpuTask, List<IGpuTask>> _negbours =
+    private readonly Dictionary<IGpuTask, List<IGpuTask>> _neighbours =
         [];
 
-    private readonly Dictionary<ulong, List<IGpuTask>> _readers = [];
+    private readonly Dictionary<ulong, List<IGpuTask>> _lastReaders = [];
 
     private readonly ResourceHasher _resourceHasher = new();
     public List<IGpuTask> Tasks { get; } = [];
@@ -15,19 +15,19 @@ public class DependencyGraphBuilder
     public void AddTask(IGpuTask task)
     {
         Tasks.Add(task);
-        _negbours[task] = new List<IGpuTask>();
+        _neighbours[task] = new List<IGpuTask>();
         foreach (var resource in task.Writes)
         {
             var id = resource.Accept(_resourceHasher);
-            if (_readers.TryGetValue(id, out var readers))
+            if (_lastReaders.TryGetValue(id, out var readers))
             {
                 foreach (var reader in readers)
-                    _negbours[task].Add(reader);
-                _readers.Clear();
+                    _neighbours[task].Add(reader);
+                _lastReaders.Clear();
             }
 
             if (_lastWriter.TryGetValue(id, out var lastWriter))
-                _negbours[task].Add(lastWriter);
+                _neighbours[task].Add(lastWriter);
 
             _lastWriter[id] = task;
         }
@@ -37,24 +37,24 @@ public class DependencyGraphBuilder
             var id = resource.Accept(_resourceHasher);
             if (_lastWriter.TryGetValue(id, out var lastWriter) &&
                 lastWriter != task)
-                _negbours[task].Add(lastWriter);
-            if (!_readers.ContainsKey(id))
-                _readers[id] = new List<IGpuTask>();
-            _readers[id].Add(task);
+                _neighbours[task].Add(lastWriter);
+            if (!_lastReaders.ContainsKey(id))
+                _lastReaders[id] = [];
+            _lastReaders[id].Add(task);
         }
     }
 
     public Dictionary<IGpuTask, List<IGpuTask>> BuildGraph()
     {
-        return _negbours;
+        return _neighbours;
     }
 
     public void Clear()
     {
         Tasks.Clear();
-        _readers.Clear();
+        _lastReaders.Clear();
         _lastWriter.Clear();
-        _negbours.Clear();
+        _neighbours.Clear();
     }
 }
 
