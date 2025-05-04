@@ -17,13 +17,13 @@ public class VkSemaphore : IDisposable
         _device = device;
         SemaphoreCreateInfo createInfo = new()
         {
-            SType = StructureType.SemaphoreCreateInfo,
+            SType = StructureType.SemaphoreCreateInfo
         };
 
         unsafe
         {
             if (_ctx.Api.CreateSemaphore(_device.Device,
-                    ref createInfo, null, out _semaphore) !=
+                    in createInfo, null, out _semaphore) !=
                 Result.Success)
                 throw new Exception("Failed to create semaphore");
         }

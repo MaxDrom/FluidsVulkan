@@ -97,6 +97,14 @@ public sealed class GraphicsPipelineBuilder
                 attributeDescr);
             return this;
         }
+
+        public AttributeAggregator AddBindings(VertexInputAttributeDescription[] attributeDescriptions, VertexInputBindingDescription bindingDescription)
+        {
+            _scope._vertexInputBindingDescriptions.Add(bindingDescription);
+            _scope._vertexInputAttributeDescriptions.AddRange(
+                attributeDescriptions);
+            return this;
+        }
     }
 
     public class GraphicsPipelineBuilderInputAssembly(

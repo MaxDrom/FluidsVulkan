@@ -28,7 +28,6 @@ public sealed class GameWindow : IDisposable
 
 
     private readonly VkSemaphore[] _renderFinishedSemaphores;
-    private readonly VkAllocator _stagingAllocator;
     private readonly VkSwapchainContext _swapchainCtx;
     private readonly IWindow _window;
 
@@ -36,10 +35,6 @@ public sealed class GameWindow : IDisposable
     private VkSemaphore _updateFinishedSemaphore;
 
     private bool _disposedValue;
-
-    private bool _firstRun = true;
-
-    private bool _firstRunRender = true;
     private int _fps;
     private int _frameIndex;
     private uint _imageIndex;
@@ -49,7 +44,6 @@ public sealed class GameWindow : IDisposable
 
     private double _totalTime;
     private List<VkImageView> _views;
-    private WindowOptions _windowOptions;
     private VkFence _updateFence;
 
     public GameWindow(
@@ -69,8 +63,6 @@ public sealed class GameWindow : IDisposable
         _format = displayFormat.Format;
         _colorSpace = displayFormat.ColorSpace;
         _allocator = allocator;
-        _stagingAllocator = stagingAllocator;
-        _windowOptions = displayFormat.WindowOptions;
         _window = window;
         _swapchainCtx = new VkSwapchainContext(_ctx, _device);
         _commandPool = new VkCommandPool(_ctx, _device,
@@ -102,7 +94,14 @@ public sealed class GameWindow : IDisposable
                 new VkSemaphore(_ctx, _device);
         }
 
-
+        _updateFence = new VkFence(_ctx, _device);
+        _updateFinishedSemaphore = new VkSemaphore(_ctx, _device);
+        _updateFinishedSemaphore.Flag =
+            PipelineStageFlags.ComputeShaderBit;
+        _computeBuffer =
+            _commandPool.AllocateBuffers(
+                CommandBufferLevel.Primary, 1)[0];
+        
         _frameIndex = 0;
         _totalFrameTime = 0d;
         _fps = 0;
@@ -375,23 +374,7 @@ public sealed class GameWindow : IDisposable
 
     private async Task Update(double frameTime)
     {
-        
         _eventHandler.Update();
-        if (_firstRun)
-        {
-            _updateFence = new VkFence(_ctx, _device);
-            //_updateFence.Reset();
-            _updateFinishedSemaphore = new VkSemaphore(_ctx, _device);
-            _updateFinishedSemaphore.Flag =
-                PipelineStageFlags.ComputeShaderBit;
-            _computeBuffer =
-                _commandPool.AllocateBuffers(
-                    CommandBufferLevel.Primary, 1)[0];
-            _firstRun = false;
-            _totalTime = 0;
-            return;
-        }
-
         await _updateFence.WaitFor();
         _updateFence.Reset();
         _totalFrameTime += frameTime;
@@ -420,12 +403,6 @@ public sealed class GameWindow : IDisposable
 
     private void Render(double frameTime)
     {
-        if (_firstRunRender)
-        {
-            _firstRunRender = false;
-            return;
-        }
-
         _fences[_frameIndex].WaitFor().GetAwaiter().GetResult();
         if (_swapchain.AcquireNextImage(_device,
                 _imageAvailableSemaphores[_frameIndex],
