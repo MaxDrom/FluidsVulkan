@@ -79,7 +79,7 @@ public sealed class GameWindow : IDisposable
 
         _fences = new VkFence[FramesInFlight];
         _imageAvailableSemaphores = new VkSemaphore[FramesInFlight];
-        _renderFinishedSemaphores = new VkSemaphore[FramesInFlight];
+        _renderFinishedSemaphores = new VkSemaphore[_swapchain.Images.Length];
 
         for (var i = 0; i < FramesInFlight; i++)
         {
@@ -90,6 +90,10 @@ public sealed class GameWindow : IDisposable
                     Flag = PipelineStageFlags
                         .ColorAttachmentOutputBit,
                 };
+        }
+
+        for (var i = 0; i < _swapchain.Images.Length; i++)
+        {
             _renderFinishedSemaphores[i] =
                 new VkSemaphore(_ctx, _device);
         }
@@ -101,7 +105,7 @@ public sealed class GameWindow : IDisposable
         _computeBuffer =
             _commandPool.AllocateBuffers(
                 CommandBufferLevel.Primary, 1)[0];
-        
+
         _frameIndex = 0;
         _totalFrameTime = 0d;
         _fps = 0;
@@ -414,11 +418,11 @@ public sealed class GameWindow : IDisposable
         RecordBuffer(_buffers[_frameIndex], (int)_imageIndex);
         _buffers[_frameIndex].Submit(_device.GraphicsQueue,
             _fences[_frameIndex],
-            [_updateFinishedSemaphore,_imageAvailableSemaphores[_frameIndex]],
-            [_renderFinishedSemaphores[_frameIndex]]);
+            [_updateFinishedSemaphore, _imageAvailableSemaphores[_frameIndex]],
+            [_renderFinishedSemaphores[_imageIndex]]);
         _swapchainCtx.QueuePresent(_device.PresentQueue,
             [_imageIndex],
-            [_swapchain], [_renderFinishedSemaphores[_frameIndex]]);
+            [_swapchain], [_renderFinishedSemaphores[_imageIndex]]);
         _frameIndex = ++_frameIndex % FramesInFlight;
     }
 }
