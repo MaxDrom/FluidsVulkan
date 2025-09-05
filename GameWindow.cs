@@ -10,7 +10,7 @@ namespace FluidsVulkan;
 
 public sealed class GameWindow : IDisposable
 {
-    private const int FramesInFlight = 2;
+    private const int FramesInFlight = 3;
     private readonly VkAllocator _allocator;
     private readonly VkCommandBuffer[] _buffers;
 
@@ -31,8 +31,8 @@ public sealed class GameWindow : IDisposable
     private readonly VkSwapchainContext _swapchainCtx;
     private readonly IWindow _window;
 
-    private VkCommandBuffer _computeBuffer;
-    private VkSemaphore _updateFinishedSemaphore;
+    private VkCommandBuffer[] _computeBuffers;
+    private VkSemaphore[] _updateFinishedSemaphores;
 
     private bool _disposedValue;
     private int _fps;
@@ -44,7 +44,7 @@ public sealed class GameWindow : IDisposable
 
     private double _totalTime;
     private List<VkImageView> _views;
-    private VkFence _updateFence;
+    private VkFence[] _updateFences;
 
     public GameWindow(
         VkContext ctx,
@@ -79,7 +79,8 @@ public sealed class GameWindow : IDisposable
 
         _fences = new VkFence[FramesInFlight];
         _imageAvailableSemaphores = new VkSemaphore[FramesInFlight];
-        _renderFinishedSemaphores = new VkSemaphore[_swapchain.Images.Length];
+        _renderFinishedSemaphores =
+            new VkSemaphore[_swapchain.Images.Length];
 
         for (var i = 0; i < FramesInFlight; i++)
         {
@@ -98,13 +99,21 @@ public sealed class GameWindow : IDisposable
                 new VkSemaphore(_ctx, _device);
         }
 
-        _updateFence = new VkFence(_ctx, _device);
-        _updateFinishedSemaphore = new VkSemaphore(_ctx, _device);
-        _updateFinishedSemaphore.Flag =
-            PipelineStageFlags.ComputeShaderBit;
-        _computeBuffer =
+        _updateFences = new VkFence[FramesInFlight];
+        _updateFinishedSemaphores =
+            new VkSemaphore[FramesInFlight];
+        for (var i = 0; i < FramesInFlight; i++)
+        {
+            _updateFences[i] = new VkFence(_ctx, _device);
+            _updateFinishedSemaphores[i] =
+                new VkSemaphore(_ctx, _device);
+            _updateFinishedSemaphores[i].Flag =
+                PipelineStageFlags.ComputeShaderBit;
+        }
+
+        _computeBuffers =
             _commandPool.AllocateBuffers(
-                CommandBufferLevel.Primary, 1)[0];
+                CommandBufferLevel.Primary, FramesInFlight);
 
         _frameIndex = 0;
         _totalFrameTime = 0d;
@@ -143,9 +152,12 @@ public sealed class GameWindow : IDisposable
                 sem.Dispose();
             foreach (var sem in _renderFinishedSemaphores)
                 sem.Dispose();
+            foreach (var updateFence in _updateFences)
+                updateFence.Dispose();
+            foreach (var updateFinishedSemaphore in
+                     _updateFinishedSemaphores)
+                updateFinishedSemaphore.Dispose();
 
-            _updateFence.Dispose();
-            _updateFinishedSemaphore.Dispose();
             _commandPool.Dispose();
             RenderTarget.Dispose();
             _textureBuffer.Dispose();
@@ -379,8 +391,8 @@ public sealed class GameWindow : IDisposable
     private async Task Update(double frameTime)
     {
         _eventHandler.Update();
-        await _updateFence.WaitFor();
-        _updateFence.Reset();
+        await _updateFences[_frameIndex].WaitFor();
+        _updateFences[_frameIndex].Reset();
         _totalFrameTime += frameTime;
         _fps++;
         if (_totalFrameTime >= 1)
@@ -392,16 +404,19 @@ public sealed class GameWindow : IDisposable
 
         if (OnUpdateAsync != null)
             await OnUpdateAsync!.Invoke(frameTime, _totalTime);
-        _computeBuffer.Reset(CommandBufferResetFlags
+        _computeBuffers[_frameIndex].Reset(CommandBufferResetFlags
             .None);
         using (var recording =
-               _computeBuffer.Begin(CommandBufferUsageFlags
-                   .SimultaneousUseBit))
+               _computeBuffers[_frameIndex].Begin(
+                   CommandBufferUsageFlags
+                       .SimultaneousUseBit))
         {
             await ComputeScheduler.Instance.RecordAll(recording);
         }
-        _computeBuffer.Submit(_device.ComputeQueue, _updateFence, [],
-            [_updateFinishedSemaphore]);
+
+        _computeBuffers[_frameIndex].Submit(_device.ComputeQueue,
+            _updateFences[_frameIndex], [],
+            [_updateFinishedSemaphores[_frameIndex]]);
         _totalTime += frameTime;
     }
 
@@ -418,7 +433,10 @@ public sealed class GameWindow : IDisposable
         RecordBuffer(_buffers[_frameIndex], (int)_imageIndex);
         _buffers[_frameIndex].Submit(_device.GraphicsQueue,
             _fences[_frameIndex],
-            [_updateFinishedSemaphore, _imageAvailableSemaphores[_frameIndex]],
+            [
+                _updateFinishedSemaphores[_frameIndex],
+                _imageAvailableSemaphores[_frameIndex]
+            ],
             [_renderFinishedSemaphores[_imageIndex]]);
         _swapchainCtx.QueuePresent(_device.PresentQueue,
             [_imageIndex],
