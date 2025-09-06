@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using Autofac.Features.AttributeFilters;
 using FluidsVulkan.ComputeScheduling;
 using FluidsVulkan.ImGui;
+using FluidsVulkan.ResourceManagement;
 using FluidsVulkan.Vulkan;
 using FluidsVulkan.Vulkan.VkAllocatorSystem;
 using Silk.NET.Vulkan;
@@ -44,14 +45,14 @@ public class FluidEngineGpu : IParticleSystem, IParametrized
     private readonly VkContext _ctx;
     private readonly VkDevice _device;
     private readonly uint _gridSize = 256;
-    private readonly VkBuffer<Fluid> _newParticles;
+    private readonly VersionBufferStorage<Fluid> _newParticles;
 
     private readonly VkTexture _prefixSum;
     private readonly PrefixSumGPU _prefixSumGpu;
     private readonly VkImageView _prefixSumView;
     private readonly ComputeShader<uint> _replaceShader;
     private readonly VkAllocator _stagingAllocator;
-    private VkBuffer<float> _densityBuffer;
+    
     private ComputeShader<DensityPushConstant> _densityShader;
     private float _perceptionRadius;
     private ComputeShader<PredictPushConstant> _predictShader;
@@ -117,13 +118,13 @@ public class FluidEngineGpu : IParticleSystem, IParametrized
         _replaceShader = new ComputeShader<uint>(ctx, device,
             "shader_objects/replace.comp.spv");
 
-        Buffer = new VkBuffer<Fluid>(initialData.Length,
+        Buffer = new VersionBufferStorage<Fluid>(initialData.Length,
             BufferUsageFlags.StorageBufferBit |
             BufferUsageFlags.TransferSrcBit |
             BufferUsageFlags.TransferDstBit,
             SharingMode.Exclusive, _allocator);
 
-        _newParticles = new VkBuffer<Fluid>(initialData.Length,
+        _newParticles = new VersionBufferStorage<Fluid>(initialData.Length,
             BufferUsageFlags.StorageBufferBit |
             BufferUsageFlags.TransferSrcBit |
             BufferUsageFlags.TransferDstBit,
@@ -145,7 +146,7 @@ public class FluidEngineGpu : IParticleSystem, IParametrized
 
         ComputeScheduler.Instance.AddTask(new CopyBufferTask(
             stagingBuffer,
-            Buffer,
+            Buffer.GetWriteHandle(),
             (uint)(Marshal.SizeOf<Fluid>() * initialData.Length)));
         
 
@@ -193,7 +194,7 @@ public class FluidEngineGpu : IParticleSystem, IParametrized
     [SliderFloat("Viscosity", 0, 500)]
     public float ViscosityMult { get; set; } = 300f;
 
-    public VkBuffer<Fluid> Buffer { get; }
+    public VersionBufferStorage<Fluid> Buffer { get; }
 
 
     public Task Update(double delta, double totalTime)
@@ -239,7 +240,7 @@ public class FluidEngineGpu : IParticleSystem, IParametrized
 
     public void Dispose()
     {
-        _densityBuffer.Dispose();
+        
         _countShader.Dispose();
         _predictShader.Dispose();
         _replaceShader.Dispose();
@@ -279,10 +280,6 @@ public class FluidEngineGpu : IParticleSystem, IParametrized
 
     private void InitDensityPipeline()
     {
-        _densityBuffer = new VkBuffer<float>((int)_boidsCount,
-            BufferUsageFlags.StorageBufferBit,
-            SharingMode.Exclusive, _allocator);
-
         _densityShader = new ComputeShader<DensityPushConstant>(_ctx,
             _device,
             "shader_objects/density.comp.spv");

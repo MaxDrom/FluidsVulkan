@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using Autofac.Features.AttributeFilters;
 using FluidsVulkan.ComputeScheduling;
 using FluidsVulkan.ImGui;
+using FluidsVulkan.ResourceManagement;
 using FluidsVulkan.Vulkan;
 using FluidsVulkan.Vulkan.Builders;
 using FluidsVulkan.Vulkan.VkAllocatorSystem;
@@ -36,7 +37,7 @@ public sealed class FluidView : IDisposable, IParametrized
     private readonly VkBuffer<uint> _indexBuffer;
     private readonly uint[] _indices = [0, 1, 2, 2, 3, 0];
 
-    private readonly VkBuffer<Fluid> _instanceBuffer;
+    private readonly VersionBufferStorage<Fluid> _instanceBuffer;
 
     private readonly VkRenderPass _renderPass;
     private readonly VkAllocator _stagingAllocator;
@@ -154,7 +155,7 @@ public sealed class FluidView : IDisposable, IParametrized
         CopyDataToBuffer(_indices, _indexBuffer);
         CopyDataToBuffer(_vertices, _vertexBuffer);
 
-        _instanceBuffer = new VkBuffer<Fluid>(
+        _instanceBuffer = new VersionBufferStorage<Fluid>(
             _fluidEngine.Buffer.Size,
             BufferUsageFlags.VertexBufferBit |
             BufferUsageFlags.TransferDstBit,
@@ -243,7 +244,7 @@ public sealed class FluidView : IDisposable, IParametrized
         recording.BindIndexBuffer(_indexBuffer, 0,
             IndexType.Uint32);
         recording.BindVertexBuffers(0,
-            [_vertexBuffer, _instanceBuffer], [0, 0]);
+            [_vertexBuffer, _instanceBuffer.GetReadHandle()], [0, 0]);
         renderRecording.SetViewport(ref viewport);
         renderRecording.SetScissor(ref scissor);
         renderRecording.DrawIndexed((uint)_indices.Length,
@@ -255,7 +256,7 @@ public sealed class FluidView : IDisposable, IParametrized
     {
         _timeFromFixedUpdate += frameTime;
         for (var step = 0;
-             step < 1 && _timeFromFixedUpdate >= _fixedUpdateInterval;
+             step < 2 && _timeFromFixedUpdate >= _fixedUpdateInterval;
              step++)
         {
             await _fluidEngine.Update(
@@ -265,7 +266,7 @@ public sealed class FluidView : IDisposable, IParametrized
         }
 
         ComputeScheduler.Instance.AddTask(new CopyBufferTask(
-            _fluidEngine.Buffer, _instanceBuffer,
+            _fluidEngine.Buffer.GetReadHandle(), _instanceBuffer.GetWriteHandle(),
             _instanceBuffer.Size));
     }
 

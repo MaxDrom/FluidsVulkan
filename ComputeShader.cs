@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using FluidsVulkan.ComputeScheduling;
 using FluidsVulkan.ComputeScheduling.Executors;
+using FluidsVulkan.ResourceManagement;
 using FluidsVulkan.Vulkan;
 using Silk.NET.Vulkan;
 
@@ -13,7 +14,8 @@ public class ComputeShader<T>(VkContext ctx,
     : IDisposable
     where T : unmanaged
 {
-    private readonly Dictionary<int, (IVkBuffer, AccessFlags)>
+    private readonly
+        Dictionary<int, (IVersionBufferStorage, AccessFlags)>
         _bufferBindings =
             [];
 
@@ -102,7 +104,14 @@ public class ComputeShader<T>(VkContext ctx,
         if (_computePipeline == null)
             InitPipeline();
         var updater = new VkDescriptorSetUpdater(ctx, device);
-        foreach (var (binding, (buffer, _)) in _bufferBindings)
+        var reads = new List<IComputeResource>();
+        var writes = new List<IComputeResource>();
+        foreach (var (binding, (versionBuffer, accessFlags)) in
+                 _bufferBindings)
+        {
+            if (!accessFlags.HasFlag(AccessFlags.ShaderReadBit))
+                continue;
+            var buffer = versionBuffer.GetReadHandle();
             updater = updater
                 .AppendWrite(_descriptorSets[_currentSet], binding,
                     DescriptorType.StorageBuffer,
@@ -115,6 +124,46 @@ public class ComputeShader<T>(VkContext ctx,
                         },
                     ]
                 );
+
+            reads.Add(new BufferResource
+            {
+                Buffer = buffer,
+                AccessFlags = accessFlags,
+            });
+
+            if (accessFlags.HasFlag(AccessFlags.ShaderWriteBit))
+                writes.Add(new BufferResource
+                {
+                    Buffer = buffer,
+                    AccessFlags = accessFlags,
+                });
+        }
+
+        foreach (var (binding, (versionBuffer, accessFlags)) in
+                 _bufferBindings)
+        {
+            if (accessFlags.HasFlag(AccessFlags.ShaderReadBit))
+                continue;
+            var buffer = versionBuffer.GetWriteHandle();
+            updater = updater
+                .AppendWrite(_descriptorSets[_currentSet], binding,
+                    DescriptorType.StorageBuffer,
+                    [
+                        new DescriptorBufferInfo
+                        {
+                            Buffer = buffer.Buffer,
+                            Offset = 0,
+                            Range = buffer.Size,
+                        },
+                    ]
+                );
+
+            writes.Add(new BufferResource
+            {
+                Buffer = buffer,
+                AccessFlags = accessFlags,
+            });
+        }
 
         foreach (var (binding, (image, _)) in _imageBindings)
             updater = updater
@@ -131,25 +180,6 @@ public class ComputeShader<T>(VkContext ctx,
 
         updater.Update();
 
-
-        var reads = new List<IComputeResource>();
-        var writes = new List<IComputeResource>();
-        foreach (var (_, (buffer, accessFlags)) in _bufferBindings)
-        {
-            if (accessFlags.HasFlag(AccessFlags.ShaderReadBit))
-                reads.Add(new BufferResource
-                {
-                    Buffer = buffer,
-                    AccessFlags = accessFlags,
-                });
-
-            if (accessFlags.HasFlag(AccessFlags.ShaderWriteBit))
-                writes.Add(new BufferResource
-                {
-                    Buffer = buffer,
-                    AccessFlags = accessFlags,
-                });
-        }
 
         foreach (var (_, (image, accessFlags)) in _imageBindings)
         {
@@ -195,7 +225,7 @@ public class ComputeShader<T>(VkContext ctx,
     }
 
     public void SetBufferStorage<TBuf>(int binding,
-        VkBuffer<TBuf> buffer,
+        VersionBufferStorage<TBuf> buffer,
         AccessFlags accessFlags)
         where TBuf : unmanaged
     {

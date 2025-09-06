@@ -29,6 +29,7 @@ public sealed class GameWindow : IDisposable
 
     private readonly VkSemaphore[] _renderFinishedSemaphores;
     private readonly VkSemaphore[] _readyToNextUpdate;
+    private readonly VkSemaphore[] _readyToNextRender;
     private readonly VkSwapchainContext _swapchainCtx;
     private readonly IWindow _window;
 
@@ -104,15 +105,20 @@ public sealed class GameWindow : IDisposable
         _updateFinishedSemaphores =
             new VkSemaphore[FramesInFlight];
         _readyToNextUpdate = new VkSemaphore[FramesInFlight];
+        _readyToNextRender = new VkSemaphore[FramesInFlight];
         for (var i = 0; i < FramesInFlight; i++)
         {
             _updateFences[i] = new VkFence(_ctx, _device);
             _updateFinishedSemaphores[i] =
                 new VkSemaphore(_ctx, _device);
             _updateFinishedSemaphores[i].Flag =
-                PipelineStageFlags.ComputeShaderBit;
+                PipelineStageFlags.VertexShaderBit;
             _readyToNextUpdate[i] = new VkSemaphore(_ctx, _device);
-            _readyToNextUpdate[i].Flag = PipelineStageFlags.ComputeShaderBit;
+            _readyToNextUpdate[i].Flag =
+                PipelineStageFlags.ComputeShaderBit;
+            _readyToNextRender[i] = new VkSemaphore(_ctx, _device);
+            _readyToNextRender[i].Flag =
+                PipelineStageFlags.ComputeShaderBit;
         }
 
         _computeBuffers =
@@ -163,8 +169,9 @@ public sealed class GameWindow : IDisposable
                 updateFinishedSemaphore.Dispose();
             foreach (var ready in _readyToNextUpdate)
                 ready.Dispose();
+            foreach (var ready in _readyToNextRender)
+                ready.Dispose();
             
-
             _commandPool.Dispose();
             RenderTarget.Dispose();
             _textureBuffer.Dispose();
@@ -395,7 +402,7 @@ public sealed class GameWindow : IDisposable
         CreateViews();
     }
 
-    bool _firstRun = true;
+    int _firstRun = 0;
 
     private async Task Update(double frameTime)
     {
@@ -423,15 +430,19 @@ public sealed class GameWindow : IDisposable
             await ComputeScheduler.Instance.RecordAll(recording);
         }
 
-        if (_firstRun)
+        if (_firstRun == 0)
         {
             _computeBuffers[_frameIndex].Submit(_device.ComputeQueue,
                 _updateFences[_frameIndex],
                 [],
-                [_updateFinishedSemaphores[_frameIndex], _readyToNextUpdate[_frameIndex]]);
-            _firstRun = false;
+                [
+                    _updateFinishedSemaphores[_frameIndex],
+                    _readyToNextUpdate[_frameIndex]
+                ]);
+            _firstRun++;
         }
-        else
+        else if (_firstRun == 1)
+        {
             _computeBuffers[_frameIndex].Submit(_device.ComputeQueue,
                 _updateFences[_frameIndex],
                 [
@@ -439,7 +450,29 @@ public sealed class GameWindow : IDisposable
                         (_frameIndex + FramesInFlight - 1) %
                         FramesInFlight]
                 ],
-                [_updateFinishedSemaphores[_frameIndex], _readyToNextUpdate[_frameIndex]]);
+                [
+                    _updateFinishedSemaphores[_frameIndex],
+                    _readyToNextUpdate[_frameIndex]
+                ]);
+            _firstRun++;
+        }
+        else
+        {
+            _computeBuffers[_frameIndex].Submit(_device.ComputeQueue,
+                _updateFences[_frameIndex],
+                [
+                    _readyToNextUpdate[
+                        (_frameIndex + FramesInFlight - 1) %
+                        FramesInFlight],
+                    _readyToNextRender[
+                        (_frameIndex + FramesInFlight - 2) %
+                        FramesInFlight]
+                ],
+                [
+                    _updateFinishedSemaphores[_frameIndex],
+                    _readyToNextUpdate[_frameIndex]
+                ]);
+        }
 
         _totalTime += frameTime;
     }
@@ -461,7 +494,10 @@ public sealed class GameWindow : IDisposable
                 _updateFinishedSemaphores[_frameIndex],
                 _imageAvailableSemaphores[_frameIndex]
             ],
-            [_renderFinishedSemaphores[_imageIndex]]);
+            [
+                _renderFinishedSemaphores[_imageIndex],
+                _readyToNextRender[_frameIndex]
+            ]);
         _swapchainCtx.QueuePresent(_device.PresentQueue,
             [_imageIndex],
             [_swapchain], [_renderFinishedSemaphores[_imageIndex]]);
