@@ -1,11 +1,12 @@
 using FluidsVulkan.FluidGPU;
+using FluidsVulkan.ResourceManagement;
 using FluidsVulkan.Vulkan;
 
 namespace FluidsVulkan;
 
 public interface IParticleSystem : IDisposable
 {
-    VkBuffer<Fluid> Buffer { get; }
+    VersionBufferStorage<Fluid> Buffer { get; }
 
     Task Update(double delta, double totalTime);
 }
